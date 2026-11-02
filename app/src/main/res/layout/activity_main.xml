@@ -356,7 +356,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Info Section Card -->
+            <!-- Community / Help Section Card -->
             <com.google.android.material.card.MaterialCardView
                 style="@style/Widget.ScreenMonitor.CardView"
                 android:layout_width="match_parent"
@@ -373,7 +373,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/section_how_it_works"
+                        android:text="@string/section_community"
                         android:textAppearance="@style/TextAppearance.ScreenMonitor.TitleMedium"
                         android:textColor="?attr/colorPrimary" />
 
@@ -381,10 +381,33 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:text="@string/desc_how_it_works"
+                        android:text="@string/desc_community"
                         android:textAppearance="@style/TextAppearance.ScreenMonitor.BodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:lineSpacingExtra="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGithub"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/btn_github"
+                        app:icon="@drawable/ic_github"
+                        app:iconGravity="start"
+                        app:iconPadding="8dp"
+                        style="@style/Widget.ScreenMonitor.Button.Outlined" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnTelegram"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/btn_telegram"
+                        app:icon="@drawable/ic_telegram"
+                        app:iconGravity="start"
+                        app:iconPadding="8dp"
+                        app:iconTint="?attr/colorOnPrimary"
+                        style="@style/Widget.ScreenMonitor.Button.Filled" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

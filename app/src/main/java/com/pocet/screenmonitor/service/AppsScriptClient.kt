@@ -24,9 +24,17 @@ import java.util.concurrent.TimeUnit
  *   const data = JSON.parse(e.postData.contents);
  *   // data: { date: "dd.MM.yyyy", amount: 1234.56, accountType: "REAL" }
  *   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Plan_30_days');
- *   const dates = sheet.getRange('B:B').getValues().flat();
- *   const row = dates.findIndex(d => d === data.date) + 1;
- *   if (row > 0) sheet.getRange(`E${row}`).setValue(data.amount);
+ *   const dates = sheet.getRange('B6:B35').getValues().flat();
+ *   const timeZone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+ *   const target = String(data.date).trim();
+ *   const index = dates.findIndex(value => {
+ *     if (!value) return false;
+ *     const d = value instanceof Date ? value : new Date(value);
+ *     if (isNaN(d.getTime())) return false;
+ *     return Utilities.formatDate(d, timeZone, 'dd.MM.yyyy') === target;
+ *   });
+ *   if (index === -1) return ContentService.createTextOutput('Date not found: ' + target);
+ *   sheet.getRange(`E${6 + index}`).setValue(Number(data.amount));
  *   return ContentService.createTextOutput('OK');
  * }
  * ```
@@ -92,7 +100,17 @@ class AppsScriptClient private constructor(
                 val responseBody = response.body?.string() ?: ""
                 if (response.isSuccessful) {
                     Timber.d("Apps Script response: $responseBody")
-                    AppsScriptResult.Success(responseBody)
+                    // Apps Script always returns HTTP 200, even for application
+                    // errors. Treat explicit error bodies as failures so the
+                    // service does not record a write that never reached E.
+                    val normalized = responseBody.trim()
+                    if (normalized.startsWith("Error:", ignoreCase = true) ||
+                        normalized.startsWith("Date not found", ignoreCase = true)
+                    ) {
+                        AppsScriptResult.Error(normalized)
+                    } else {
+                        AppsScriptResult.Success(responseBody)
+                    }
                 } else {
                     Timber.e("Apps Script error: ${response.code} - $responseBody")
                     // Detect HTML error pages (Google login, bot protection, etc.)

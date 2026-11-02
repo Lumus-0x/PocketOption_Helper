@@ -28,3 +28,28 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
+
+# Local OCR test screenshots
+/photo_*.jpg
+
+# AI / LLM tooling (local artifacts, not part of the app)
+.claude/
+CLAUDE.md
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.continue/
+.aider*
+.codex/
+.opencode/
+.agents/
+AGENTS.md
+.gemini/
+GEMINI.md
+.specstory/
+.llm/
+*.prompt

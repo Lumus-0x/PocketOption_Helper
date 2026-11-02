@@ -39,7 +39,7 @@ jobs:
         # Use date + GitHub run number for unique version
         DATE=$(date -u +"%Y.%m.%d")
         RUN_NUM=${{ github.run_number }}
-        VERSION="1.0.${DATE}-${RUN_NUM}"
+        VERSION="1.1.${DATE}-${RUN_NUM}"
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tag=v$VERSION" >> $GITHUB_OUTPUT
         echo "Generated version: $VERSION"

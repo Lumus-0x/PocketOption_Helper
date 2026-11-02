@@ -23,8 +23,6 @@
     <string name="btn_web_app_url_not_set">URL Apps Script не задан</string>
 
     <!-- Descriptions -->
-    <string name="desc_how_it_works">1. Создайте Apps Script в Google Таблице (Расширения → Apps Script)\n2. Вставьте код doPost(e) для записи баланса\n3. Разверните как Веб-приложение: Выполнять от моего имени, Доступ: Все\n4. Скопируйте URL и вставьте в приложение\n5. Разрешите захват экрана и начните мониторинг</string>
-
     <string name="desc_permissions">Необходимо: исключение из оптимизации батареи, точные будильники (Android 14+), уведомления (Android 13+)</string>
     <string name="desc_screen_capture">Отслеживает "qt real usd" или "qt demo usd" на экране и отправляет баланс в Apps Script</string>
 
@@ -40,7 +38,13 @@
     <string name="fast_mode_title">Быстрый режим (до ~2 секунд)</string>
     <string name="fast_mode_desc">Экран проверяется каждую секунду, OCR запускается только при изменении области баланса, а запись в таблицу — только когда сумма изменилась. Обычный режим: проверка раз в 10 секунд, запись раз в минуту. Для 6 часов трейдинга в день быстрый режим даёт умеренный расход батареи.</string>
     <string name="section_permissions">Разрешения и настройки</string>
-    <string name="section_how_it_works">Как это работает</string>
+    <string name="section_community">Помощь и исходники</string>
+    <string name="desc_community">Как это работает, пример таблицы Plan_30_days и исходный код — на GitHub. Вопросы, обновления и связь с автором — в Telegram.</string>
+    <string name="btn_github">GitHub проекта</string>
+    <string name="btn_telegram">Telegram @lumi_ouroboros</string>
+    <string name="toast_link_error">Не удалось открыть ссылку</string>
+    <string name="url_github" translatable="false">https://github.com/Lumus-0x/PocketOption_Helper</string>
+    <string name="url_telegram" translatable="false">https://t.me/lumi_ouroboros</string>
 
     <!-- Radio buttons -->
     <string name="rb_real">QT Real USD</string>

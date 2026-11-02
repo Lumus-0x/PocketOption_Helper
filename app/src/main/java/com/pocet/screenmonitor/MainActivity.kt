@@ -1,6 +1,7 @@
 package com.pocet.screenmonitor
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -59,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSetWebAppUrl: Button
     private lateinit var btnCopyError: Button
     private lateinit var btnHistory: Button
+    private lateinit var btnGithub: Button
+    private lateinit var btnTelegram: Button
     private lateinit var switchFastMode: MaterialSwitch
     private lateinit var rgAccountType: RadioGroup
     private lateinit var rbReal: RadioButton
@@ -166,6 +169,8 @@ class MainActivity : AppCompatActivity() {
         btnSetWebAppUrl = findViewById(R.id.btnSetWebAppUrl)
         btnCopyError = findViewById(R.id.btnCopyError)
         btnHistory = findViewById(R.id.btnHistory)
+        btnGithub = findViewById(R.id.btnGithub)
+        btnTelegram = findViewById(R.id.btnTelegram)
         switchFastMode = findViewById(R.id.switchFastMode)
         rgAccountType = findViewById(R.id.rgAccountType)
         rbReal = findViewById(R.id.rbReal)
@@ -230,6 +235,17 @@ class MainActivity : AppCompatActivity() {
         btnRequestPermissions.setOnClickListener { requestAllPermissions() }
         btnSetWebAppUrl.setOnClickListener { showWebAppUrlDialog() }
         btnHistory.setOnClickListener { showBalanceHistory() }
+        btnGithub.setOnClickListener { openExternalLink(getString(R.string.url_github)) }
+        btnTelegram.setOnClickListener { openExternalLink(getString(R.string.url_telegram)) }
+    }
+
+    private fun openExternalLink(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "No app available to open $url")
+            Toast.makeText(this, R.string.toast_link_error, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showBalanceHistory() {
