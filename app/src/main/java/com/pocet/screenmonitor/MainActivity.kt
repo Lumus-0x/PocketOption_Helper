@@ -61,18 +61,25 @@ class MainActivity : AppCompatActivity() {
     // Store last error for copy functionality
     private var lastTestError: String? = null
 
+    // True between the consent result and the service's CAPTURE_STARTED /
+    // CAPTURE_ERROR broadcast. Keeps the UI from briefly showing "stopped"
+    // while the foreground service is starting.
+    private var isStartingCapture = false
+
     // BroadcastReceiver for service state changes
     private val serviceStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 ScreenCaptureService.ACTION_CAPTURE_STARTED -> {
                     Timber.d("Received CAPTURE_STARTED broadcast")
+                    isStartingCapture = false
                     captureScheduler.setServiceRunning(true)
                     updateServiceStatusUI()
                     updateStatus(getString(R.string.status_running))
                 }
                 ScreenCaptureService.ACTION_CAPTURE_STOPPED -> {
                     Timber.d("Received CAPTURE_STOPPED broadcast")
+                    isStartingCapture = false
                     captureScheduler.setServiceRunning(false)
                     updateServiceStatusUI()
                     updateStatus(getString(R.string.status_stopped))
@@ -81,6 +88,7 @@ class MainActivity : AppCompatActivity() {
                     val message = intent.getStringExtra(ScreenCaptureService.EXTRA_ERROR_MESSAGE)
                         ?: getString(R.string.status_capture_error, "unknown")
                     Timber.e("Received CAPTURE_ERROR broadcast: $message")
+                    isStartingCapture = false
                     captureScheduler.setServiceRunning(false)
                     updateServiceStatusUI()
                     updateStatus(getString(R.string.status_capture_error, message))
@@ -368,13 +376,31 @@ class MainActivity : AppCompatActivity() {
                 putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
                 putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
             }
-            ContextCompat.startForegroundService(this, serviceIntent)
 
-            // Service status will be updated via broadcast receiver when service actually starts
-            updateStatus(getString(R.string.status_starting_capture))
-            Toast.makeText(this, getString(R.string.toast_capture_starting), Toast.LENGTH_SHORT).show()
+            isStartingCapture = true
+            try {
+                ContextCompat.startForegroundService(this, serviceIntent)
+
+                // Service status will be updated via broadcast receiver when
+                // the service actually starts.
+                updateServiceStatusUI()
+                updateStatus(getString(R.string.status_starting_capture))
+                Toast.makeText(this, getString(R.string.toast_capture_starting), Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                isStartingCapture = false
+                Timber.e(e, "Unable to start ScreenCaptureService")
+                val message = e.message ?: "unknown"
+                updateServiceStatusUI()
+                updateStatus(getString(R.string.status_capture_error, message))
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_capture_error, message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         } else {
             Timber.w("MediaProjection denied or cancelled")
+            isStartingCapture = false
             updateStatus(getString(R.string.status_need_permissions))
             Toast.makeText(this, getString(R.string.toast_capture_permission_required), Toast.LENGTH_LONG).show()
         }
@@ -451,6 +477,7 @@ class MainActivity : AppCompatActivity() {
         // in onDestroy() and broadcasts CAPTURE_STOPPED.
         val stopped = stopService(Intent(this, ScreenCaptureService::class.java))
         Timber.d("stopService returned $stopped")
+        isStartingCapture = false
         captureScheduler.setServiceRunning(false)
 
         // Do not call updateServiceStatusUI() here: the service is destroyed
@@ -477,14 +504,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         val isRunning = captureScheduler.isServiceRunning()
+        val isStarting = isStartingCapture && !isRunning
 
-        btnStartCapture.isEnabled = !isRunning
-        btnStopCapture.isEnabled = isRunning
+        btnStartCapture.isEnabled = !isRunning && !isStarting
+        btnStopCapture.isEnabled = isRunning || isStarting
 
-        if (isRunning) {
-            tvStatus.text = getString(R.string.status_running)
-        } else {
-            tvStatus.text = getString(R.string.status_stopped)
+        tvStatus.text = when {
+            isRunning -> getString(R.string.status_running)
+            isStarting -> getString(R.string.status_starting_capture)
+            else -> getString(R.string.status_stopped)
         }
     }
 
