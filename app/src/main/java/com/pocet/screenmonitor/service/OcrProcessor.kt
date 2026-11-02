@@ -66,6 +66,7 @@ class OcrProcessor {
         }
 
         isProcessing = true
+        var bitmapToRecycle: Bitmap? = null
         try {
             // Create InputImage directly from media.Image
             // ML Kit supports YUV_420_888 and NV21 formats directly
@@ -79,8 +80,23 @@ class OcrProcessor {
                 if (bitmap == null) {
                     return@withContext BalanceResult.unknown("Failed to convert image")
                 }
-                // Downscale for faster OCR
-                val scaledBitmap = downscaleBitmap(bitmap)
+
+                // Pocket Option renders the account type and balance in the
+                // top-right corner. Crop that area so chart prices, the
+                // status bar and other UI numbers cannot produce false
+                // matches. Ratios work on any screen resolution.
+                val balanceBitmap = cropBalanceRegion(bitmap)
+                if (balanceBitmap !== bitmap) {
+                    bitmap.recycle()
+                }
+
+                // Downscale for faster OCR (the crop is usually small enough
+                // that this is a no-op).
+                val scaledBitmap = downscaleBitmap(balanceBitmap)
+                if (scaledBitmap !== balanceBitmap) {
+                    balanceBitmap.recycle()
+                }
+                bitmapToRecycle = scaledBitmap
                 inputImage = InputImage.fromBitmap(scaledBitmap, 0)
             }
 
@@ -101,6 +117,9 @@ class OcrProcessor {
             BalanceResult.unknown("Error: ${e.message}")
         } finally {
             isProcessing = false
+            // Tasks.await() above guarantees ML Kit has finished with the
+            // bitmap, so it can be released now instead of waiting for GC.
+            bitmapToRecycle?.recycle()
             // NOTE: Caller (ScreenCaptureService) is responsible for closing the image
         }
     }
@@ -187,6 +206,44 @@ class OcrProcessor {
     }
 
     /**
+     * Crops the top-right area that contains:
+     *
+     *   QT Demo  USD
+     *   46,563.80
+     *
+     * or:
+     *
+     *   QT Real  USD
+     *   12.40
+     *
+     * The ratios are based on the Pocket Option portrait layout and leave
+     * enough margin for different screen sizes / status bar heights.
+     */
+    private fun cropBalanceRegion(bitmap: Bitmap): Bitmap {
+        val left = (bitmap.width * BALANCE_CROP_LEFT_RATIO).toInt()
+            .coerceIn(0, bitmap.width - 1)
+        val top = (bitmap.height * BALANCE_CROP_TOP_RATIO).toInt()
+            .coerceIn(0, bitmap.height - 1)
+        val right = (bitmap.width * BALANCE_CROP_RIGHT_RATIO).toInt()
+            .coerceIn(left + 1, bitmap.width)
+        val bottom = (bitmap.height * BALANCE_CROP_BOTTOM_RATIO).toInt()
+            .coerceIn(top + 1, bitmap.height)
+
+        Timber.d(
+            "Cropping balance region: left=$left, top=$top, " +
+                "right=$right, bottom=$bottom " +
+                "(${right - left}x${bottom - top})"
+        )
+
+        return try {
+            Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to crop balance region, using full frame")
+            bitmap
+        }
+    }
+
+    /**
      * Downscale bitmap for faster OCR processing
      */
     fun downscaleBitmap(bitmap: Bitmap, maxDimension: Int = 1920): Bitmap {
@@ -226,5 +283,11 @@ class OcrProcessor {
     companion object {
         private const val TAG = "OcrProcessor"
         private const val OCR_TIMEOUT_SECONDS = 20L
+
+        // Top-right balance area (relative to the full screenshot).
+        private const val BALANCE_CROP_LEFT_RATIO = 0.42f
+        private const val BALANCE_CROP_TOP_RATIO = 0.03f
+        private const val BALANCE_CROP_RIGHT_RATIO = 0.92f
+        private const val BALANCE_CROP_BOTTOM_RATIO = 0.14f
     }
 }
