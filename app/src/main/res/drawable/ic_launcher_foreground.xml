@@ -48,8 +48,14 @@
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
 
-    <!-- Small dots on trend line -->
-    <circle android:cx="42" android:cy="54" android:r="3" android:fillColor="#FFFFFF" />
-    <circle android:cx="70" android:cy="50" android:r="3" android:fillColor="#FFFFFF" />
-    <circle android:cx="90" android:cy="52" android:r="3" android:fillColor="#FFFFFF" />
+    <!-- Small dots on trend line (circles as paths) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,54 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M67,50 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M87,52 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
 </vector>
