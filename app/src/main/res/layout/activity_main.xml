@@ -8,10 +8,6 @@
     android:clipToPadding="false"
     android:paddingBottom="16dp"
     tools:context=".MainActivity">
-        android:fillViewport="true"
-        android:clipToPadding="false"
-        android:paddingBottom="16dp"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
             android:layout_width="match_parent"

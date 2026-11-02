@@ -77,6 +77,19 @@ class MainActivity : AppCompatActivity() {
                     updateServiceStatusUI()
                     updateStatus(getString(R.string.status_stopped))
                 }
+                ScreenCaptureService.ACTION_CAPTURE_ERROR -> {
+                    val message = intent.getStringExtra(ScreenCaptureService.EXTRA_ERROR_MESSAGE)
+                        ?: getString(R.string.status_capture_error, "unknown")
+                    Timber.e("Received CAPTURE_ERROR broadcast: $message")
+                    captureScheduler.setServiceRunning(false)
+                    updateServiceStatusUI()
+                    updateStatus(getString(R.string.status_capture_error, message))
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_capture_error, message),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
@@ -118,6 +131,7 @@ class MainActivity : AppCompatActivity() {
             initViews()
             initManagers()
             setupClickListeners()
+            registerServiceStateReceiver()
             checkPermissionsAndSetup()
         } catch (e: Exception) {
             Timber.e(e, "Fatal error in onCreate")
@@ -210,6 +224,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadWebAppUrl() {
+        if (!this::btnSetWebAppUrl.isInitialized || !this::btnTestConnection.isInitialized) {
+            return
+        }
         val prefs = getSharedPreferences("apps_script_prefs", Context.MODE_PRIVATE)
         val url = prefs.getString("web_app_url", "") ?: ""
         if (url.isNotEmpty()) {
@@ -314,6 +331,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestMediaProjection() {
+        // Ask for the Apps Script URL before showing the system consent
+        // dialog. Otherwise the user grants capture permission and the
+        // service starts only to fail because there is nowhere to send data.
+        val prefs = getSharedPreferences("apps_script_prefs", Context.MODE_PRIVATE)
+        val webAppUrl = prefs.getString("web_app_url", "") ?: ""
+        if (webAppUrl.isEmpty()) {
+            updateStatus(getString(R.string.status_need_web_app_url))
+            Toast.makeText(this, getString(R.string.toast_web_app_url_required), Toast.LENGTH_LONG).show()
+            showWebAppUrlDialog()
+            return
+        }
+
         val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
         val intent = mediaProjectionManager.createScreenCaptureIntent()
         mediaProjectionLauncher.launch(intent)
@@ -417,18 +446,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopCaptureService() {
-        val intent = Intent(this, ScreenCaptureService::class.java).apply {
-            action = ScreenCaptureService.ACTION_STOP_CAPTURE
-        }
-        // Use startService to send command to already running foreground service
-        startService(intent)
+        // stopService() tears the service down even if it is currently not in
+        // the foreground. The service releases MediaProjection/VirtualDisplay
+        // in onDestroy() and broadcasts CAPTURE_STOPPED.
+        val stopped = stopService(Intent(this, ScreenCaptureService::class.java))
+        Timber.d("stopService returned $stopped")
         captureScheduler.setServiceRunning(false)
-        updateServiceStatusUI()
+
+        // Do not call updateServiceStatusUI() here: the service is destroyed
+        // asynchronously and ScreenCaptureService.isRunning may still be true
+        // for a moment. The CAPTURE_STOPPED broadcast will refresh the UI.
+        if (this::btnStartCapture.isInitialized) {
+            btnStartCapture.isEnabled = true
+        }
+        if (this::btnStopCapture.isInitialized) {
+            btnStopCapture.isEnabled = false
+        }
         updateStatus(getString(R.string.status_stopped))
         Toast.makeText(this, getString(R.string.toast_capture_stopped), Toast.LENGTH_SHORT).show()
     }
 
     private fun updateServiceStatusUI() {
+        // onCreate() can fail while inflating the layout. onResume() still
+        // runs afterwards, so every view access must be guarded.
+        if (!this::btnStartCapture.isInitialized ||
+            !this::btnStopCapture.isInitialized ||
+            !this::tvStatus.isInitialized
+        ) {
+            return
+        }
+
         val isRunning = captureScheduler.isServiceRunning()
 
         btnStartCapture.isEnabled = !isRunning
@@ -442,29 +489,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus(message: String) {
-        tvStatus.text = message
         Timber.d("Status: $message")
+        if (this::tvStatus.isInitialized) {
+            tvStatus.text = message
+        }
+    }
+
+    private fun registerServiceStateReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(ScreenCaptureService.ACTION_CAPTURE_STARTED)
+            addAction(ScreenCaptureService.ACTION_CAPTURE_STOPPED)
+            addAction(ScreenCaptureService.ACTION_CAPTURE_ERROR)
+        }
+        // Context.RECEIVER_NOT_EXPORTED only exists on API 33+. On older
+        // versions the 3-argument registerReceiver() overload does not accept
+        // the flag at all, so use ContextCompat for a version-safe call.
+        ContextCompat.registerReceiver(
+            this,
+            serviceStateReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onResume() {
         super.onResume()
-        // Register broadcast receiver for service state changes
-        val filter = IntentFilter().apply {
-            addAction(ScreenCaptureService.ACTION_CAPTURE_STARTED)
-            addAction(ScreenCaptureService.ACTION_CAPTURE_STOPPED)
-        }
-        registerReceiver(serviceStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        // The receiver is registered in onCreate() so that CAPTURE_STARTED /
+        // CAPTURE_ERROR broadcasts emitted right after the MediaProjection
+        // consent dialog closes are not lost while the activity is paused.
         updateServiceStatusUI()
         loadWebAppUrl()
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
         try {
             unregisterReceiver(serviceStateReceiver)
         } catch (e: IllegalArgumentException) {
-            // Receiver not registered
+            // Receiver was never registered (e.g. onCreate failed early)
         }
+        super.onDestroy()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

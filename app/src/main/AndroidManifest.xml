@@ -8,8 +8,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
-    <!-- Screen Capture -->
-    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
+    <!-- Screen Capture: MediaProjection consent is requested via
+         MediaProjectionManager.createScreenCaptureIntent(). There is no
+         android.permission.MEDIA_PROJECTION permission. -->
 
     <!-- Network for Google Sheets API -->
     <uses-permission android:name="android.permission.INTERNET" />

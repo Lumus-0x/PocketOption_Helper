@@ -11,6 +11,7 @@
     <string name="status_need_web_app_url">Требуется URL Apps Script</string>
     <string name="status_testing_connection">🔄 Проверка соединения с Apps Script…</string>
     <string name="status_connection_success">✅ Соединение с Apps Script успешно</string>
+    <string name="status_capture_error">❌ Ошибка захвата: %s</string>
 
     <!-- Button texts -->
     <string name="btn_start_capture">Начать захват</string>
@@ -47,6 +48,7 @@
     <string name="toast_capture_starting">Запуск захвата экрана…</string>
     <string name="toast_capture_permission_required">Требуется разрешение на захват экрана</string>
     <string name="toast_capture_stopped">Захват экрана остановлен</string>
+    <string name="toast_capture_error">Ошибка захвата экрана: %s</string>
     <string name="toast_all_permissions_granted">Все разрешения получены</string>
     <string name="toast_some_permissions_denied">Некоторые разрешения отклонены</string>
     <string name="toast_some_permissions_denied_detail">Отклонены разрешения: %s</string>

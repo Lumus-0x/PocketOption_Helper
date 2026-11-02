@@ -136,17 +136,24 @@ class CaptureScheduler(private val context: Context) {
     }
 
     /**
-     * Mark service as running/stopped
+     * Persist the last known service state. The authoritative value is
+     * [ScreenCaptureService.isRunning]; this flag is kept only for the
+     * informational CaptureWorker check.
      */
     fun setServiceRunning(running: Boolean) {
         prefs.edit().putBoolean(PREF_KEY_SERVICE_RUNNING, running).apply()
     }
 
     /**
-     * Check if service is marked as running
+     * Check whether screen capture is actually alive in this process.
+     *
+     * The previous implementation returned a SharedPreferences flag, which
+     * survives process death and reboots. After a reboot the UI showed
+     * "running" even though MediaProjection consent is gone and the service
+     * does not exist.
      */
     fun isServiceRunning(): Boolean {
-        return prefs.getBoolean(PREF_KEY_SERVICE_RUNNING, false)
+        return ScreenCaptureService.isRunning
     }
 
     /**
@@ -157,7 +164,10 @@ class CaptureScheduler(private val context: Context) {
             // Small delay to let system settle
             delay(5000)
             schedulePeriodicCapture()
-            setServiceRunning(true)
+
+            // MediaProjection consent cannot survive a reboot, so capture is
+            // never running at this point. Clear any stale flag.
+            setServiceRunning(false)
         }
     }
 }

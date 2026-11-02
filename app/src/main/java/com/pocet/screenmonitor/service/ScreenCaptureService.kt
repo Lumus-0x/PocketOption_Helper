@@ -1,14 +1,14 @@
 package com.pocet.screenmonitor.service
 
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
-import android.content.pm.ServiceInfo
 import android.content.Intent
-import android.content.SharedPreferences
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -21,15 +21,14 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
-import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.pocet.screenmonitor.MainActivity
 import com.pocet.screenmonitor.R
 import com.pocet.screenmonitor.di.ServiceEntryPoint
 import com.pocet.screenmonitor.model.BalanceResult
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +36,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class ScreenCaptureService : Service() {
@@ -46,60 +46,138 @@ class ScreenCaptureService : Service() {
         const val ACTION_STOP_CAPTURE = "com.pocet.screenmonitor.STOP_CAPTURE"
         const val ACTION_CAPTURE_STARTED = "com.pocet.screenmonitor.CAPTURE_STARTED"
         const val ACTION_CAPTURE_STOPPED = "com.pocet.screenmonitor.CAPTURE_STOPPED"
+        const val ACTION_CAPTURE_ERROR = "com.pocet.screenmonitor.CAPTURE_ERROR"
+
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
+        const val EXTRA_ERROR_MESSAGE = "error_message"
+
         const val PREFS_NAME = "capture_prefs"
         const val PREF_KEY_ACCOUNT_TYPE = "target_account_type"
+
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "screen_capture_channel"
-        private const val CAPTURE_INTERVAL_MS = 10000L // 10 seconds
+        private const val CAPTURE_INTERVAL_MS = 10_000L
+        private const val MIN_WRITE_INTERVAL_MS = 60_000L
         private const val MAX_VD_RETRIES = 3
         private const val VD_RETRY_DELAY_MS = 500L
-        private const val TEST_CAPTURE_TIMEOUT_MS = 3000L
-        private const val MAX_CONSECUTIVE_FAILURES = 5
+        private const val PROJECTION_START_DELAY_MS = 300L
+
+        /**
+         * True only while this process has a live capture session. This is more
+         * reliable than a SharedPreferences flag, which can survive a process
+         * death or a reboot and leave the UI stuck in the "running" state.
+         */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
     }
 
+    @Volatile
     private var mediaProjection: MediaProjection? = null
+
+    @Volatile
     private var virtualDisplay: VirtualDisplay? = null
+
+    @Volatile
     private var imageReader: ImageReader? = null
+
     private var displayMetrics: DisplayMetrics? = null
     private var windowManager: WindowManager? = null
 
     private val ocrProcessor = OcrProcessor()
-    private val textParser = TextParser()
+
+    // These scopes live for the whole service instance. Individual jobs are
+    // cancelled when capture stops; the parent scopes are only cancelled in
+    // onDestroy(). Cancelling a parent SupervisorJob here would make any
+    // subsequent startCapture() silently do nothing.
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(serviceJob + Dispatchers.Main.immediate)
     private val captureJob = SupervisorJob()
-    private val mainJob = SupervisorJob()
     private val captureScope = CoroutineScope(captureJob + Dispatchers.IO)
-    private val mainScope = CoroutineScope(mainJob + Dispatchers.Main)
+
+    private var projectionSetupJob: Job? = null
+    private var captureLoopJob: Job? = null
+
+    @Volatile
     private var isCapturing = false
+
+    @Volatile
+    private var isStopping = false
+
+    @Volatile
     private var lastSuccessfulWrite: Long = 0
-    private val MIN_WRITE_INTERVAL_MS = 60000L // Minimum 1 minute between writes
+
+    @Volatile
+    private var writeInProgress = false
+
     private var targetAccountType: BalanceResult.AccountType = BalanceResult.AccountType.REAL
-    private var consecutiveFailures = 0
-    private var lastSuccessfulCaptureTime: Long = 0
-    private var captureVerificationJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        Timber.d("ScreenCaptureService onCreate - PID: ${android.os.Process.myPid()}, SDK: ${Build.VERSION.SDK_INT}")
+        Timber.d(
+            "ScreenCaptureService onCreate - PID: ${android.os.Process.myPid()}, " +
+                "SDK: ${Build.VERSION.SDK_INT}"
+        )
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        displayMetrics = DisplayMetrics()
-        windowManager?.defaultDisplay?.getMetrics(displayMetrics!!)
+        displayMetrics = readDisplayMetrics()
+        Timber.d(
+            "Display metrics: ${displayMetrics?.widthPixels}x${displayMetrics?.heightPixels}, " +
+                "density: ${displayMetrics?.densityDpi}"
+        )
 
-        // Load target account type preference
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val accountTypeStr = prefs.getString(PREF_KEY_ACCOUNT_TYPE, "REAL") ?: "REAL"
-        targetAccountType = BalanceResult.AccountType.valueOf(accountTypeStr)
+        targetAccountType = try {
+            BalanceResult.AccountType.valueOf(accountTypeStr)
+        } catch (e: IllegalArgumentException) {
+            Timber.w("Unknown account type '$accountTypeStr', falling back to REAL")
+            BalanceResult.AccountType.REAL
+        }
         Timber.d("Target account type: $targetAccountType")
-        Timber.d("Display metrics: ${displayMetrics?.widthPixels}x${displayMetrics?.heightPixels}, density: ${displayMetrics?.densityDpi}")
 
         createNotificationChannel()
     }
 
+    /**
+     * Returns the real size of the display. getMetrics() can return only the
+     * app window on some Android 11+ multi-window/foldable configurations,
+     * which would crop the captured image.
+     */
+    @Suppress("DEPRECATION")
+    private fun readDisplayMetrics(): DisplayMetrics {
+        val metrics = DisplayMetrics()
+        val wm = windowManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && wm != null) {
+            val bounds = wm.maximumWindowMetrics.bounds
+            if (bounds.width() > 0 && bounds.height() > 0) {
+                metrics.widthPixels = bounds.width()
+                metrics.heightPixels = bounds.height()
+                metrics.densityDpi = resources.displayMetrics.densityDpi
+                return metrics
+            }
+        }
+
+        if (wm != null) {
+            wm.defaultDisplay.getRealMetrics(metrics)
+        }
+
+        if (metrics.widthPixels <= 0 || metrics.heightPixels <= 0) {
+            metrics.widthPixels = resources.displayMetrics.widthPixels
+            metrics.heightPixels = resources.displayMetrics.heightPixels
+            metrics.densityDpi = resources.displayMetrics.densityDpi
+        }
+        return metrics
+    }
+
     private fun getAppsScriptClient(): AppsScriptClient? {
         return try {
-            val entryPoint = EntryPointAccessors.fromApplication(applicationContext, ServiceEntryPoint::class.java)
+            val entryPoint = EntryPointAccessors.fromApplication(
+                applicationContext,
+                ServiceEntryPoint::class.java
+            )
             entryPoint.appsScriptClient().get()
         } catch (e: Exception) {
             Timber.e(e, "Failed to get AppsScriptClient from Hilt EntryPoint")
@@ -108,184 +186,179 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Timber.d("onStartCommand: action=${intent?.action}, flags=$flags, startId=$startId, isCapturing=$isCapturing")
+        Timber.d(
+            "onStartCommand: action=${intent?.action}, flags=$flags, " +
+                "startId=$startId, isCapturing=$isCapturing"
+        )
 
-        when (intent?.action) {
-            ACTION_START_CAPTURE -> {
-                // Prevent duplicate start if already capturing
-                if (isCapturing) {
-                    Timber.w("Already capturing, ignoring duplicate START_CAPTURE")
-                    return START_STICKY
-                }
+        // A null intent means Android restarted the service after the process
+        // was killed. MediaProjection consent cannot be restored, so keeping
+        // the service alive here would only produce a "did not call
+        // startForeground" crash.
+        if (intent == null) {
+            Timber.w("Service restarted without an intent; stopping")
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
-                // Get MediaProjection from result code and data
-                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1)
-                val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
-
-                Timber.d("MediaProjection data: resultCode=$resultCode, resultData=${resultData != null}")
-
-                if (resultCode == android.app.Activity.RESULT_OK && resultData != null) {
-                    // Start foreground service FIRST with correct type (required on Android 14+)
-                    // Then create MediaProjection
-                    startForegroundServiceWithType()
-
-                    // Small delay to ensure foreground service is fully active (fixes Android 14+ race condition)
-                    mainScope.launch {
-                        try {
-                            delay(500) // Wait for foreground service to be fully registered
-                        } catch (e: Exception) {
-                            Timber.d("Delay interrupted")
-                            return@launch
-                        }
-
-                        try {
-                            val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            Timber.d("Getting MediaProjection from manager")
-                            val projection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
-                            if (projection != null) {
-                                Timber.d("MediaProjection created successfully")
-                                startCapture(projection)
-                            } else {
-                                Timber.e("Failed to create MediaProjection - returned null")
-                                sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                                stopSelf()
-                            }
-                        } catch (e: Exception) {
-                            Timber.e(e, "Error creating MediaProjection")
-                            sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                            stopSelf()
-                        }
-                    }
-                } else {
-                    Timber.e("Invalid MediaProjection data: resultCode=$resultCode, resultData=${resultData != null}")
-                    sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                    stopSelf()
-                }
-            }
+        when (intent.action) {
+            ACTION_START_CAPTURE -> handleStartCapture(intent)
             ACTION_STOP_CAPTURE -> {
                 Timber.d("ACTION_STOP_CAPTURE received")
-                stopCapture()
-                sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
+                stopCaptureAndStopSelf()
+            }
+            else -> {
+                Timber.w("Unknown action: ${intent.action}")
                 stopSelf()
             }
         }
 
-        return START_STICKY
+        // START_STICKY is wrong for MediaProjection: a sticky restart has no
+        // consent token and cannot start capture.
+        return START_NOT_STICKY
+    }
+
+    private fun handleStartCapture(intent: Intent) {
+        if (isCapturing) {
+            Timber.w("Already capturing, ignoring duplicate START_CAPTURE")
+            return
+        }
+
+        // Android 14+ requires a foreground service of type mediaProjection
+        // to be running BEFORE MediaProjectionManager.getMediaProjection().
+        // Start it first, even if the extras below turn out to be invalid.
+        try {
+            startForegroundWithType()
+        } catch (e: Exception) {
+            failCapture("Unable to start foreground service: ${e.message}")
+            return
+        }
+
+        val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+        @Suppress("DEPRECATION")
+        val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        if (resultCode != Activity.RESULT_OK || resultData == null) {
+            failCapture("MediaProjection consent data is missing")
+            return
+        }
+
+        projectionSetupJob?.cancel()
+        projectionSetupJob = serviceScope.launch {
+            var createdProjection: MediaProjection? = null
+            try {
+                // Give the system a moment to register the foreground service
+                // on OEM builds that are slow to update the service state.
+                delay(PROJECTION_START_DELAY_MS)
+
+                val projection = withContext(Dispatchers.Default) {
+                    val manager = getSystemService(
+                        Context.MEDIA_PROJECTION_SERVICE
+                    ) as MediaProjectionManager
+                    manager.getMediaProjection(resultCode, resultData).also {
+                        createdProjection = it
+                    }
+                }
+
+                if (projection == null) {
+                    failCapture("MediaProjectionManager returned null")
+                    return@launch
+                }
+
+                if (isStopping) {
+                    projection.stop()
+                    return@launch
+                }
+
+                startCapture(projection)
+            } catch (e: CancellationException) {
+                // If cancellation happened after the projection was created,
+                // make sure the screen is not left being captured.
+                try {
+                    createdProjection?.stop()
+                } catch (stopError: Exception) {
+                    Timber.w(stopError, "Failed to stop orphaned MediaProjection")
+                }
+                throw e
+            } catch (e: Exception) {
+                failCapture("Failed to create MediaProjection: ${e.message}")
+            }
+        }
     }
 
     /**
-     * Start foreground service with MEDIA_PROJECTION type (required on Android 14+)
-     * Must be called BEFORE creating MediaProjection
+     * Starts the foreground service with the correct type on all supported
+     * Android versions.
+     *
+     * The old code used the literal value 8 for Android 10-13. 8 is
+     * FOREGROUND_SERVICE_TYPE_LOCATION, not MEDIA_PROJECTION (32). Passing a
+     * type that is not declared in the manifest makes startForeground() throw
+     * on those versions, so capture never starts.
      */
-    private fun startForegroundServiceWithType() {
+    private fun startForegroundWithType() {
         Timber.d("Starting foreground service with MEDIA_PROJECTION type")
-
-        // Create intent to open MainActivity when notification is tapped
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_text))
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
+        val notification = buildNotification(getString(R.string.notification_text))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ (API 29): use startForeground with foregroundServiceType
-            // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION = 8 (added in API 34)
-            val mediaProjectionType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            } else {
-                // For Android 10-13, use the constant value directly
-                8 // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            }
-            Timber.d("Calling startForeground with type: $mediaProjectionType (SDK: ${Build.VERSION.SDK_INT})")
-            try {
-                startForeground(NOTIFICATION_ID, notification, mediaProjectionType)
-                Timber.d("startForeground SUCCESS")
-            } catch (e: Exception) {
-                Timber.e(e, "startForeground FAILED: ${e.message}")
-                throw e
-            }
+            )
         } else {
-            Timber.d("Calling startForeground without type (SDK < 29)")
-            try {
-                startForeground(NOTIFICATION_ID, notification)
-                Timber.d("startForeground SUCCESS (no type)")
-            } catch (e: Exception) {
-                Timber.e(e, "startForeground FAILED (no type): ${e.message}")
-                throw e
-            }
+            startForeground(NOTIFICATION_ID, notification)
         }
+        Timber.d("startForeground SUCCESS")
     }
 
-    private fun startCapture(projection: MediaProjection) {
+    private suspend fun startCapture(projection: MediaProjection) {
         Timber.d("Starting screen capture")
         mediaProjection = projection
-        consecutiveFailures = 0
 
-        try {
-            setupImageReader()
+        val ready = withContext(Dispatchers.Default) {
+            try {
+                setupImageReader()
 
-            // CRITICAL: Register MediaProjection callback BEFORE creating VirtualDisplay
-            // Required on Android 14+ (API 34+)
-            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-                override fun onStop() {
-                    Timber.d("MediaProjection stopped by system")
-                    mainScope.launch {
-                        stopCapture()
-                        sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                        stopSelf()
+                // Android 14+ requires the callback to be registered before
+                // createVirtualDisplay().
+                registerProjectionCallback(projection)
+
+                createVirtualDisplayWithRetry()
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start screen capture")
+                false
+            }
+        }
+
+        if (!ready) {
+            failCapture("VirtualDisplay could not be created")
+            return
+        }
+
+        if (isStopping) {
+            releaseCaptureResources()
+            return
+        }
+
+        isCapturing = true
+        isRunning = true
+        startCaptureLoop()
+        sendCaptureBroadcast(ACTION_CAPTURE_STARTED)
+        Timber.d("Screen capture started successfully")
+    }
+
+    private fun registerProjectionCallback(projection: MediaProjection) {
+        projection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                Timber.d("MediaProjection stopped by system")
+                serviceScope.launch {
+                    // Ignore the callback caused by our own stopCapture().
+                    if (!isStopping && isCapturing) {
+                        stopCaptureAndStopSelf()
                     }
                 }
-            }, Handler(Looper.getMainLooper()))
-            Timber.d("MediaProjection callback registered")
-
-            // Create VirtualDisplay with retry logic
-            val vdCreated = createVirtualDisplayWithRetry()
-
-            if (!vdCreated || virtualDisplay == null) {
-                Timber.e("VirtualDisplay creation failed after all retries!")
-                sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                stopCapture()
-                stopSelf()
-                return
             }
-
-            // CRITICAL: Verify capture works immediately after VirtualDisplay creation
-            val captureVerified = verifyCaptureWorks()
-            if (!captureVerified) {
-                Timber.e("Capture verification failed - VirtualDisplay not producing frames!")
-                sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-                stopCapture()
-                stopSelf()
-                return
-            }
-
-            isCapturing = true
-            // Foreground already started in onStartCommand, just update notification if needed
-            startCaptureLoop()
-            startCaptureWatchdog()
-
-            // Notify that capture started successfully
-            sendBroadcast(Intent(ACTION_CAPTURE_STARTED))
-            Timber.d("Screen capture started successfully, capture loop running")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to start screen capture")
-            sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
-            stopCapture()
-            stopSelf()
-        }
+        }, Handler(Looper.getMainLooper()))
+        Timber.d("MediaProjection callback registered")
     }
 
     private fun setupImageReader() {
@@ -293,44 +366,35 @@ class ScreenCaptureService : Service() {
         val height = displayMetrics?.heightPixels ?: 1920
         Timber.d("Setting up ImageReader: ${width}x${height}, format=RGBA_8888")
 
-        try {
-            // Close existing ImageReader if any
-            imageReader?.close()
-
-            imageReader = ImageReader.newInstance(
-                width, height,
-                PixelFormat.RGBA_8888,
-                3 // Max images - increased buffer for reliability
-            ).apply {
-                // We don't use OnImageAvailableListener - instead we use periodic capture in startCaptureLoop()
-                // This avoids race conditions and double-processing
-            }
-            Timber.d("ImageReader created successfully: ${imageReader?.surface != null}")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to create ImageReader")
-            throw e
-        }
+        imageReader?.close()
+        imageReader = ImageReader.newInstance(
+            width,
+            height,
+            PixelFormat.RGBA_8888,
+            3
+        )
+        Timber.d("ImageReader created: surface=${imageReader?.surface != null}")
     }
 
     private fun createVirtualDisplayWithRetry(): Boolean {
         for (attempt in 1..MAX_VD_RETRIES) {
             Timber.d("VirtualDisplay creation attempt $attempt/$MAX_VD_RETRIES")
 
-            val success = createVirtualDisplay()
-            if (success) {
+            if (createVirtualDisplay()) {
                 Timber.d("VirtualDisplay created successfully on attempt $attempt")
                 return true
             }
 
             if (attempt < MAX_VD_RETRIES) {
                 Timber.w("VirtualDisplay creation failed, retrying in ${VD_RETRY_DELAY_MS}ms...")
+                virtualDisplay?.release()
+                virtualDisplay = null
                 try {
                     Thread.sleep(VD_RETRY_DELAY_MS)
                 } catch (e: InterruptedException) {
-                    Timber.d("Retry sleep interrupted")
+                    Thread.currentThread().interrupt()
                     return false
                 }
-                // Recreate ImageReader on retry to ensure fresh surface
                 setupImageReader()
             }
         }
@@ -344,249 +408,173 @@ class ScreenCaptureService : Service() {
         val width = displayMetrics?.widthPixels ?: 1080
         val height = displayMetrics?.heightPixels ?: 1920
         val density = displayMetrics?.densityDpi ?: 320
-        val surface = imageReader?.surface
-
-        Timber.d("Creating VirtualDisplay: ${width}x${height}, density=$density, surface=${surface != null}, projectionValid=${projection != null}")
-
-        // Validate surface
-        if (surface == null) {
+        val surface = imageReader?.surface ?: run {
             Timber.e("ImageReader surface is null - cannot create VirtualDisplay")
             return false
         }
 
-        // Validate projection
-        if (projection == null) {
-            Timber.e("MediaProjection is null - cannot create VirtualDisplay")
-            return false
-        }
+        Timber.d(
+            "Creating VirtualDisplay: ${width}x${height}, density=$density, " +
+                "surface=${surface != null}"
+        )
 
-        // Check if projection is still valid
-        if (!isProjectionValid(projection)) {
-            Timber.e("MediaProjection appears invalid (no token or stopped)")
-            return false
-        }
-
-        try {
+        return try {
+            // AUTO_MIRROR is the flag that actually mirrors the default
+            // display. OWN_CONTENT_ONLY means "do not mirror", so combining
+            // the two (as the previous version did) can produce a display
+            // that never sends frames to the ImageReader.
             val vd = projection.createVirtualDisplay(
                 "ScreenCaptureDisplay",
-                width, height, density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR
-                    or DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
-                    or DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+                width,
+                height,
+                density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 surface,
                 object : VirtualDisplay.Callback() {
                     override fun onPaused() {
                         Timber.d("VirtualDisplay paused")
                     }
+
                     override fun onResumed() {
                         Timber.d("VirtualDisplay resumed")
                     }
+
                     override fun onStopped() {
-                        Timber.d("VirtualDisplay stopped")
+                        Timber.w("VirtualDisplay stopped")
+                        serviceScope.launch {
+                            if (!isStopping && isCapturing) {
+                                failCapture("VirtualDisplay was stopped by the system")
+                            }
+                        }
                     }
                 },
                 Handler(Looper.getMainLooper())
             )
 
             virtualDisplay = vd
-
             if (vd == null) {
-                Timber.e("Failed to create virtual display - returned null")
-                return false
+                Timber.e("createVirtualDisplay returned null")
+                false
             } else {
-                Timber.d("VirtualDisplay created successfully: display=${vd.display}, displayId=${vd.display?.displayId}")
-                return true
+                Timber.d(
+                    "VirtualDisplay created: displayId=${vd.display?.displayId}"
+                )
+                true
             }
         } catch (e: Exception) {
-            Timber.e(e, "Exception creating virtual display: ${e.message}, cause: ${e.cause?.message}, class: ${e.javaClass.name}")
-            return false
+            Timber.e(e, "Exception creating VirtualDisplay")
+            false
         }
-    }
-
-    private fun isProjectionValid(projection: MediaProjection): Boolean {
-        // MediaProjection doesn't expose a public validity check
-        // The callback onStop() will notify us when it's stopped by system
-        // We assume it's valid if we got it from MediaProjectionManager
-        return true
-    }
-
-    private fun verifyCaptureWorks(): Boolean {
-        Timber.d("Verifying capture works...")
-        val reader = imageReader ?: return false
-
-        // Try to acquire a frame with timeout
-        val startTime = System.currentTimeMillis()
-        var image: Image? = null
-
-        while (System.currentTimeMillis() - startTime < TEST_CAPTURE_TIMEOUT_MS) {
-            image = reader.acquireLatestImage()
-            if (image != null) {
-                break
-            }
-            try {
-                Thread.sleep(100)
-            } catch (e: InterruptedException) {
-                break
-            }
-        }
-
-        if (image != null) {
-            if (isImageValid(image)) {
-                Timber.d("Capture verification SUCCESS: Got frame ${image.width}x${image.height}, format=${image.format}")
-                lastSuccessfulCaptureTime = System.currentTimeMillis()
-                safeCloseImage(image)
-                return true
-            } else {
-                Timber.w("Capture verification: Got invalid frame")
-                safeCloseImage(image)
-            }
-        }
-        Timber.e("Capture verification FAILED: No valid frame acquired within ${TEST_CAPTURE_TIMEOUT_MS}ms")
-        return false
     }
 
     private fun startCaptureLoop() {
-        captureScope.launch {
-            while (isCapturing && captureScope.isActive) {
+        captureLoopJob?.cancel()
+        captureLoopJob = captureScope.launch {
+            Timber.d("Capture loop started")
+            while (isActive && isCapturing) {
                 try {
                     captureAndProcessFrame()
-                    consecutiveFailures = 0 // Reset on success
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Timber.e(e, "Error in capture loop")
-                    consecutiveFailures++
                 }
                 delay(CAPTURE_INTERVAL_MS)
             }
-        }
-    }
-
-    private fun startCaptureWatchdog() {
-        captureVerificationJob?.cancel()
-        captureVerificationJob = mainScope.launch {
-            while (isCapturing && mainScope.isActive) {
-                delay(30000) // Check every 30 seconds
-
-                if (!isCapturing) break
-
-                val timeSinceLastCapture = System.currentTimeMillis() - lastSuccessfulCaptureTime
-                if (timeSinceLastCapture > 60000) { // No successful capture for 60 seconds
-                    Timber.w("Watchdog: No successful capture for ${timeSinceLastCapture}ms, consecutiveFailures=$consecutiveFailures")
-
-                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                        Timber.e("Watchdog: Too many consecutive failures ($consecutiveFailures), restarting capture...")
-                        mainScope.launch {
-                            restartCapture()
-                        }
-                        break
-                    }
-                }
-            }
-        }
-    }
-
-    private fun restartCapture() {
-        Timber.d("Restarting capture...")
-        val wasCapturing = isCapturing
-        if (wasCapturing) {
-            stopCaptureInternal()
-
-            // Small delay before restart
-            try {
-                Thread.sleep(1000)
-            } catch (e: InterruptedException) {
-                return
-            }
-
-            if (mediaProjection != null) {
-                startCapture(mediaProjection!!)
-            }
+            Timber.d("Capture loop ended")
         }
     }
 
     private suspend fun captureAndProcessFrame() {
         val reader = imageReader ?: return
-        val image = reader.acquireLatestImage()
+        val image = try {
+            reader.acquireLatestImage()
+        } catch (e: IllegalStateException) {
+            Timber.w(e, "ImageReader is closed")
+            return
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to acquire image")
+            return
+        }
+
         if (image == null) {
-            Timber.w("acquireLatestImage returned null - no frame available")
-            consecutiveFailures++
+            // This is normal when the screen has not changed: SurfaceFlinger
+            // does not produce a new frame for a static screen. It is NOT a
+            // capture failure, so don't tear the session down.
+            Timber.v("No new frame available (screen unchanged)")
             return
         }
-
-        // Validate image before processing (prevents mali_gralloc invalid lock errors)
-        if (!isImageValid(image)) {
-            Timber.w("Invalid image acquired, skipping")
-            consecutiveFailures++
-            safeCloseImage(image)
-            return
-        }
-
-        lastSuccessfulCaptureTime = System.currentTimeMillis()
-        Timber.d("Captured frame: ${image.width}x${image.height}, format=${image.format}, planes=${image.planes.size}")
 
         try {
-            // Process with OCR - pass target account type for focused detection
+            if (!isImageValid(image)) {
+                Timber.w("Invalid image acquired, skipping")
+                return
+            }
+
+            Timber.d(
+                "Captured frame: ${image.width}x${image.height}, " +
+                    "format=${image.format}, planes=${image.planes.size}"
+            )
+
             val result = ocrProcessor.processImage(image, targetAccountType)
-
             if (result.isValid()) {
-                Timber.d("Valid balance detected: ${result.accountType} = ${result.amount}, confidence=${result.confidence}")
+                Timber.d(
+                    "Valid balance detected: ${result.accountType} = " +
+                        "${result.amount}, confidence=${result.confidence}"
+                )
 
-                // Check if enough time has passed since last write
                 val now = System.currentTimeMillis()
                 if (now - lastSuccessfulWrite >= MIN_WRITE_INTERVAL_MS) {
                     writeToSheets(result)
                 } else {
-                    Timber.d("Skipping write - too soon since last write (${now - lastSuccessfulWrite}ms)")
+                    Timber.d(
+                        "Skipping write - too soon since last write " +
+                            "(${now - lastSuccessfulWrite}ms)"
+                    )
                 }
             } else {
-                Timber.d("No valid balance detected: ${result.accountType}, confidence: ${result.confidence}, rawText: ${result.rawText?.take(100)}")
+                Timber.d(
+                    "No valid balance detected: ${result.accountType}, " +
+                        "confidence=${result.confidence}, " +
+                        "rawText=${result.rawText.take(100)}"
+                )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Error processing frame")
-            consecutiveFailures++
         } finally {
             safeCloseImage(image)
         }
     }
 
-    /**
-     * Validates image buffer before processing to prevent mali_gralloc errors
-     */
     private fun isImageValid(image: Image): Boolean {
         return try {
-            // Check basic properties
             if (image.width <= 0 || image.height <= 0) return false
             if (image.format <= 0) return false
 
-            // Check planes are accessible
             val planes = image.planes
             if (planes.isEmpty()) return false
 
-            // Verify each plane has valid buffer
             for (plane in planes) {
-                val buffer = plane.buffer
-                if (buffer == null) return false
-                // Try to access buffer without modifying position
-                buffer.rewind()
+                if (plane.buffer.capacity() <= 0) return false
             }
-            return true
+            true
         } catch (e: Exception) {
             Timber.w(e, "Image validation failed")
-            return false
+            false
         }
     }
 
-    /**
-     * Safely closes image with error handling for mali_gralloc issues
-     */
     private fun safeCloseImage(image: Image?) {
         image?.let {
             try {
                 it.close()
             } catch (e: IllegalStateException) {
-                // Ignore "buffer already freed" or "invalid lock" errors
                 if (e.message?.contains("invalid write locks") == true ||
                     e.message?.contains("already freed") == true ||
-                    e.message?.contains("not locked") == true) {
+                    e.message?.contains("not locked") == true
+                ) {
                     Timber.w("Image close ignored (buffer state): ${e.message}")
                 } else {
                     Timber.e(e, "Error closing image")
@@ -598,34 +586,72 @@ class ScreenCaptureService : Service() {
     }
 
     private fun writeToSheets(result: BalanceResult) {
+        if (writeInProgress) {
+            Timber.d("Skipping write - another write is already in progress")
+            return
+        }
+
         val client = getAppsScriptClient() ?: return
+        writeInProgress = true
 
         captureScope.launch {
-            val writeResult = client.sendBalance(result)
-            if (writeResult.isSuccess) {
-                Timber.d("Successfully sent to Apps Script")
-                lastSuccessfulWrite = System.currentTimeMillis()
-                updateNotification("Balance synced: ${result.amount}")
-            } else {
-                Timber.e("Failed to send to Apps Script: ${writeResult.errorMessage}")
-                updateNotification("Sync failed: ${writeResult.errorMessage}")
+            try {
+                val writeResult = client.sendBalance(result)
+                if (writeResult.isSuccess) {
+                    lastSuccessfulWrite = System.currentTimeMillis()
+                    Timber.d("Successfully sent to Apps Script")
+                    if (isCapturing) {
+                        updateNotification("Balance synced: ${result.amount}")
+                    }
+                } else {
+                    Timber.e("Failed to send to Apps Script: ${writeResult.errorMessage}")
+                    if (isCapturing) {
+                        updateNotification("Sync failed: ${writeResult.errorMessage}")
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Error sending balance to Apps Script")
+            } finally {
+                writeInProgress = false
             }
         }
     }
 
-    private fun stopCapture() {
-        Timber.d("Stopping screen capture")
-        isCapturing = false
-        stopCaptureInternal()
+    private fun stopCaptureAndStopSelf() {
+        if (isStopping) return
+
+        isStopping = true
+        val wasCapturing = isCapturing
+        try {
+            releaseCaptureResources()
+            if (wasCapturing) {
+                sendCaptureBroadcast(ACTION_CAPTURE_STOPPED)
+            }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            Timber.e(e, "Error stopping screen capture")
+        } finally {
+            isStopping = false
+        }
+        stopSelf()
     }
 
-    private fun stopCaptureInternal() {
-        // Cancel coroutines safely
-        captureJob.cancel()
-        mainJob.cancel()
-        captureVerificationJob?.cancel()
+    /**
+     * Releases all capture resources but keeps the service object usable.
+     * Called by stopCaptureAndStopSelf() and onDestroy().
+     */
+    private fun releaseCaptureResources() {
+        isCapturing = false
+        isRunning = false
 
-        // Release virtual display
+        projectionSetupJob?.cancel()
+        projectionSetupJob = null
+
+        captureLoopJob?.cancel()
+        captureLoopJob = null
+
         virtualDisplay?.let {
             try {
                 it.release()
@@ -636,7 +662,6 @@ class ScreenCaptureService : Service() {
         }
         virtualDisplay = null
 
-        // Close image reader
         imageReader?.let {
             try {
                 it.close()
@@ -647,56 +672,68 @@ class ScreenCaptureService : Service() {
         }
         imageReader = null
 
-        // Stop media projection
-        mediaProjection?.let {
-            try {
-                it.stop()
-                Timber.d("Media projection stopped")
-            } catch (e: Exception) {
-                Timber.e(e, "Error stopping media projection")
-            }
-        }
+        val projection = mediaProjection
         mediaProjection = null
-
-        // Close OCR processor
         try {
-            ocrProcessor.close()
-            Timber.d("OCR processor closed")
+            projection?.stop()
+            if (projection != null) {
+                Timber.d("Media projection stopped")
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Error closing OCR processor")
+            Timber.e(e, "Error stopping media projection")
         }
-
-        // Stop foreground service
-        try {
-            stopForeground(true)
-            Timber.d("Foreground service stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "Error stopping foreground service")
-        }
-
-        // Notify that capture stopped
-        sendBroadcast(Intent(ACTION_CAPTURE_STOPPED))
     }
 
-    private fun updateNotification(text: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun failCapture(message: String) {
+        Timber.e("Screen capture failed: $message")
+        sendCaptureBroadcast(ACTION_CAPTURE_ERROR, message)
+        stopCaptureAndStopSelf()
+    }
+
+    private fun sendCaptureBroadcast(action: String, errorMessage: String? = null) {
+        val intent = Intent(action).setPackage(packageName)
+        if (errorMessage != null) {
+            intent.putExtra(EXTRA_ERROR_MESSAGE, errorMessage)
+        }
+        sendBroadcast(intent)
+    }
+
+    private fun buildNotification(text: String): Notification {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+    }
 
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
+    private fun updateNotification(text: String) {
+        try {
+            val notification = buildNotification(text)
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Timber.w(e, "Unable to update foreground notification")
+        }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Use IMPORTANCE_DEFAULT for foreground service visibility on Android 14+
-            // LOW importance may hide the notification on some OEM skins (HyperOS, MIUI, etc.)
             val importance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 NotificationManager.IMPORTANCE_DEFAULT
             } else {
@@ -711,9 +748,9 @@ class ScreenCaptureService : Service() {
                 description = getString(R.string.notification_channel_description)
                 setShowBadge(false)
                 enableVibration(false)
-                // sound and audioAttributes are left as default (null) for silent notification
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
+
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
             Timber.d("Notification channel created with importance: $importance")
@@ -722,7 +759,30 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         Timber.d("ScreenCaptureService onDestroy")
-        stopCapture()
+        val wasCapturing = isCapturing
+
+        isStopping = true
+        try {
+            releaseCaptureResources()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            Timber.e(e, "Error releasing capture resources in onDestroy")
+        } finally {
+            isStopping = false
+        }
+
+        if (wasCapturing) {
+            sendCaptureBroadcast(ACTION_CAPTURE_STOPPED)
+        }
+
+        try {
+            ocrProcessor.close()
+        } catch (e: Exception) {
+            Timber.e(e, "Error closing OCR processor")
+        }
+
+        serviceJob.cancel()
+        captureJob.cancel()
         super.onDestroy()
     }
 
@@ -731,9 +791,9 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Timber.d("Task removed, stopping service")
-        stopCapture()
-        stopSelf()
+        // stopWithTask="false" means the capture should survive the user
+        // swiping the task away. Do not stop the foreground service here.
+        Timber.d("Task removed; keeping foreground capture service alive")
         super.onTaskRemoved(rootIntent)
     }
 }

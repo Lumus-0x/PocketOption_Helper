@@ -21,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 class OcrProcessor {
 
@@ -83,9 +84,10 @@ class OcrProcessor {
                 inputImage = InputImage.fromBitmap(scaledBitmap, 0)
             }
 
-            // Run text recognition
+            // Run text recognition. A timeout prevents a stuck ML Kit task
+            // from blocking the capture loop forever.
             val task = recognizer.process(inputImage)
-            val mlKitText = Tasks.await(task)
+            val mlKitText = Tasks.await(task, OCR_TIMEOUT_SECONDS, TimeUnit.SECONDS)
 
             // Process with TextParser
             val parser = TextParser()
@@ -125,10 +127,56 @@ class OcrProcessor {
 
         // Handle RGBA_8888 format (from ImageReader with PixelFormat.RGBA_8888)
         if (image.format == android.graphics.PixelFormat.RGBA_8888 || planes.size == 1) {
-            val buffer = planes[0].buffer
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val plane = planes[0]
+            val buffer = plane.buffer
+            val rowStride = plane.rowStride
+            val pixelStride = plane.pixelStride
+
+            if (rowStride <= 0 || pixelStride <= 0 || width <= 0 || height <= 0) {
+                Timber.w("Invalid image plane: ${width}x$height, rowStride=$rowStride, pixelStride=$pixelStride")
+                return null
+            }
+
             buffer.rewind()
-            bitmap.copyPixelsFromBuffer(buffer)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+            // Fast path: rows are tightly packed with no padding.
+            if (pixelStride == 4 &&
+                rowStride == width * 4 &&
+                buffer.remaining() >= rowStride * height
+            ) {
+                bitmap.copyPixelsFromBuffer(buffer)
+                return bitmap
+            }
+
+            // Slow path: GPU/hardware buffers often pad each row to an
+            // alignment boundary. copyPixelsFromBuffer() would shift pixels
+            // on every row, so copy row by row and skip the padding.
+            val rowData = ByteArray(rowStride)
+            val pixels = IntArray(width)
+            val bytesPerPixel = minOf(pixelStride, 4)
+
+            for (row in 0 until height) {
+                val rowStart = row * rowStride
+                if (rowStart >= buffer.limit()) break
+
+                buffer.position(rowStart)
+                val bytesToRead = minOf(rowStride, buffer.remaining())
+                buffer.get(rowData, 0, bytesToRead)
+
+                for (col in 0 until width) {
+                    val offset = col * pixelStride
+                    if (offset + bytesPerPixel > bytesToRead) break
+
+                    val r = rowData[offset].toInt() and 0xFF
+                    val g = if (bytesPerPixel > 1) rowData[offset + 1].toInt() and 0xFF else r
+                    val b = if (bytesPerPixel > 2) rowData[offset + 2].toInt() and 0xFF else r
+                    val a = if (bytesPerPixel > 3) rowData[offset + 3].toInt() and 0xFF else 0xFF
+                    pixels[col] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                }
+
+                bitmap.setPixels(pixels, 0, width, 0, row, width, 1)
+            }
             return bitmap
         }
 
@@ -177,5 +225,6 @@ class OcrProcessor {
 
     companion object {
         private const val TAG = "OcrProcessor"
+        private const val OCR_TIMEOUT_SECONDS = 20L
     }
 }

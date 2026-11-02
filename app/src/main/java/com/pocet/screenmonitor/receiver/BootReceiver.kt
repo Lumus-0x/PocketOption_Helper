@@ -50,10 +50,12 @@ class BootReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences("capture_scheduler_prefs", Context.MODE_PRIVATE)
         val wasRunning = prefs.getBoolean(CaptureScheduler.PREF_KEY_SERVICE_RUNNING, false)
 
+        // After a reboot there is no MediaProjection session: consent tokens
+        // are not persisted. Clear the stale flag so the UI does not claim
+        // that capture is still running.
         if (wasRunning) {
-            Timber.d("Service was running before boot, will need user to restart capture")
-            // We can't automatically restart MediaProjection without user interaction
-            // The user will need to open the app and grant permission again
+            prefs.edit().putBoolean(CaptureScheduler.PREF_KEY_SERVICE_RUNNING, false).apply()
+            Timber.d("Cleared stale running flag; user must grant capture consent again")
         }
     }
 }
