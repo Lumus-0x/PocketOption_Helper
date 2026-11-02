@@ -75,6 +75,17 @@
                         android:text="@string/status_stopped"
                         android:textAppearance="@style/TextAppearance.ScreenMonitor.BodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnHistory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/btn_history"
+                        app:icon="@drawable/ic_history"
+                        app:iconGravity="start"
+                        app:iconPadding="8dp"
+                        style="@style/Widget.ScreenMonitor.Button.Outlined" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -193,6 +204,47 @@
                             android:padding="12dp"
                             android:buttonTint="?attr/colorPrimary" />
                     </RadioGroup>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Update Speed Section Card -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.ScreenMonitor.CardView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/section_update_speed"
+                        android:textAppearance="@style/TextAppearance.ScreenMonitor.TitleMedium"
+                        android:textColor="?attr/colorPrimary" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchFastMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/fast_mode_title"
+                        android:textAppearance="@style/TextAppearance.ScreenMonitor.BodyLarge"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/fast_mode_desc"
+                        android:textAppearance="@style/TextAppearance.ScreenMonitor.BodyMedium"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

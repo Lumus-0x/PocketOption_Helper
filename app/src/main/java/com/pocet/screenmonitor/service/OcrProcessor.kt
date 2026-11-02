@@ -32,6 +32,15 @@ class OcrProcessor {
     private val processingScope = CoroutineScope(processingJob + Dispatchers.IO)
     private var isProcessing = false
 
+    // Cache the last OCR result for an unchanged balance region. The chart
+    // animates continuously, but the top-right crop usually stays identical,
+    // so this avoids running ML Kit every second in fast mode.
+    private var hashBuffer = IntArray(0)
+    private var lastFrameHash = 0
+    private var lastFrameHashTime = 0L
+    private var lastCachedResult: BalanceResult? = null
+    private var lastCachedTarget: BalanceResult.AccountType? = null
+
     init {
         initializeTextRecognizer()
     }
@@ -67,6 +76,7 @@ class OcrProcessor {
 
         isProcessing = true
         var bitmapToRecycle: Bitmap? = null
+        var frameHash: Int? = null
         try {
             // Create InputImage directly from media.Image
             // ML Kit supports YUV_420_888 and NV21 formats directly
@@ -75,29 +85,23 @@ class OcrProcessor {
                 // Use direct media image input for YUV formats
                 inputImage = InputImage.fromMediaImage(image, 0)
             } else {
-                // For RGBA_8888, convert to Bitmap first
-                val bitmap = imageToBitmap(image)
-                if (bitmap == null) {
-                    return@withContext BalanceResult.unknown("Failed to convert image")
+                // For RGBA_8888, copy only the top-right balance region
+                // instead of the whole screen. At a 1-second fast-mode poll
+                // this avoids allocating/copying 10+ MB per frame.
+                val balanceBitmap = imageToBalanceBitmap(image)
+                if (balanceBitmap == null) {
+                    return@withContext BalanceResult.unknown("Failed to crop image")
+                }
+                bitmapToRecycle = balanceBitmap
+
+                val hash = contentHash(balanceBitmap)
+                frameHash = hash
+                getCachedResult(hash, targetAccountType)?.let { cached ->
+                    Timber.v("Balance region unchanged, reusing OCR result")
+                    return@withContext cached
                 }
 
-                // Pocket Option renders the account type and balance in the
-                // top-right corner. Crop that area so chart prices, the
-                // status bar and other UI numbers cannot produce false
-                // matches. Ratios work on any screen resolution.
-                val balanceBitmap = cropBalanceRegion(bitmap)
-                if (balanceBitmap !== bitmap) {
-                    bitmap.recycle()
-                }
-
-                // Downscale for faster OCR (the crop is usually small enough
-                // that this is a no-op).
-                val scaledBitmap = downscaleBitmap(balanceBitmap)
-                if (scaledBitmap !== balanceBitmap) {
-                    balanceBitmap.recycle()
-                }
-                bitmapToRecycle = scaledBitmap
-                inputImage = InputImage.fromBitmap(scaledBitmap, 0)
+                inputImage = InputImage.fromBitmap(balanceBitmap, 0)
             }
 
             // Run text recognition. A timeout prevents a stuck ML Kit task
@@ -108,6 +112,7 @@ class OcrProcessor {
             // Process with TextParser
             val parser = TextParser()
             val result = parser.parseText(mlKitText, targetAccountType)
+            frameHash?.let { cacheResult(it, targetAccountType, result) }
 
             Timber.d("OCR Result: ${result.accountType}, Amount: ${result.amount}, Confidence: ${result.confidence}")
 
@@ -135,112 +140,118 @@ class OcrProcessor {
     }
 
     /**
-     * Convert Android Media Image to Bitmap (fallback for RGBA_8888)
-     * Handles RGBA_8888 format (from ImageReader with PixelFormat.RGBA_8888)
-     * Note: For YUV_420_888, we use InputImage.fromMediaImage directly in processImage
+     * Copies only the top-right balance region from an RGBA_8888 frame.
+     *
+     * Reading the crop directly from the plane buffer is important in fast
+     * mode: creating a full-screen Bitmap every second would copy 10+ MB per
+     * frame and cause unnecessary GC and battery pressure.
      */
-    private fun imageToBitmap(image: Image): Bitmap? {
+    private fun imageToBalanceBitmap(image: Image): Bitmap? {
         val planes = image.planes
         val width = image.width
         val height = image.height
-
-        // Handle RGBA_8888 format (from ImageReader with PixelFormat.RGBA_8888)
-        if (image.format == android.graphics.PixelFormat.RGBA_8888 || planes.size == 1) {
-            val plane = planes[0]
-            val buffer = plane.buffer
-            val rowStride = plane.rowStride
-            val pixelStride = plane.pixelStride
-
-            if (rowStride <= 0 || pixelStride <= 0 || width <= 0 || height <= 0) {
-                Timber.w("Invalid image plane: ${width}x$height, rowStride=$rowStride, pixelStride=$pixelStride")
-                return null
-            }
-
-            buffer.rewind()
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
-            // Fast path: rows are tightly packed with no padding.
-            if (pixelStride == 4 &&
-                rowStride == width * 4 &&
-                buffer.remaining() >= rowStride * height
-            ) {
-                bitmap.copyPixelsFromBuffer(buffer)
-                return bitmap
-            }
-
-            // Slow path: GPU/hardware buffers often pad each row to an
-            // alignment boundary. copyPixelsFromBuffer() would shift pixels
-            // on every row, so copy row by row and skip the padding.
-            val rowData = ByteArray(rowStride)
-            val pixels = IntArray(width)
-            val bytesPerPixel = minOf(pixelStride, 4)
-
-            for (row in 0 until height) {
-                val rowStart = row * rowStride
-                if (rowStart >= buffer.limit()) break
-
-                buffer.position(rowStart)
-                val bytesToRead = minOf(rowStride, buffer.remaining())
-                buffer.get(rowData, 0, bytesToRead)
-
-                for (col in 0 until width) {
-                    val offset = col * pixelStride
-                    if (offset + bytesPerPixel > bytesToRead) break
-
-                    val r = rowData[offset].toInt() and 0xFF
-                    val g = if (bytesPerPixel > 1) rowData[offset + 1].toInt() and 0xFF else r
-                    val b = if (bytesPerPixel > 2) rowData[offset + 2].toInt() and 0xFF else r
-                    val a = if (bytesPerPixel > 3) rowData[offset + 3].toInt() and 0xFF else 0xFF
-                    pixels[col] = (a shl 24) or (r shl 16) or (g shl 8) or b
-                }
-
-                bitmap.setPixels(pixels, 0, width, 0, row, width, 1)
-            }
-            return bitmap
+        if (planes.size != 1 || width <= 0 || height <= 0) {
+            Timber.w("Invalid image: ${width}x$height, planes=${planes.size}")
+            return null
         }
 
-        // For YUV_420_888, we don't convert to Bitmap here
-        // Instead, processImage uses InputImage.fromMediaImage directly
-        Timber.w("Unsupported image format for bitmap conversion: ${image.format}, planes: ${planes.size}")
-        return null
+        val plane = planes[0]
+        val buffer = plane.buffer
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        if (rowStride <= 0 || pixelStride <= 0) {
+            Timber.w("Invalid plane: rowStride=$rowStride, pixelStride=$pixelStride")
+            return null
+        }
+
+        val left = (width * BALANCE_CROP_LEFT_RATIO).toInt()
+            .coerceIn(0, width - 1)
+        val top = (height * BALANCE_CROP_TOP_RATIO).toInt()
+            .coerceIn(0, height - 1)
+        val right = (width * BALANCE_CROP_RIGHT_RATIO).toInt()
+            .coerceIn(left + 1, width)
+        val bottom = (height * BALANCE_CROP_BOTTOM_RATIO).toInt()
+            .coerceIn(top + 1, height)
+        val cropWidth = right - left
+        val cropHeight = bottom - top
+
+        val bitmap = Bitmap.createBitmap(cropWidth, cropHeight, Bitmap.Config.ARGB_8888)
+        val rowData = ByteArray(rowStride)
+        val pixels = IntArray(cropWidth)
+        val bytesPerPixel = minOf(pixelStride, 4)
+
+        buffer.rewind()
+        for (row in 0 until cropHeight) {
+            val rowStart = (top + row) * rowStride
+            if (rowStart >= buffer.limit()) break
+
+            buffer.position(rowStart)
+            val bytesToRead = minOf(rowStride, buffer.remaining())
+            buffer.get(rowData, 0, bytesToRead)
+
+            for (col in 0 until cropWidth) {
+                val offset = (left + col) * pixelStride
+                if (offset + bytesPerPixel > bytesToRead) break
+
+                val r = rowData[offset].toInt() and 0xFF
+                val g = if (bytesPerPixel > 1) rowData[offset + 1].toInt() and 0xFF else r
+                val b = if (bytesPerPixel > 2) rowData[offset + 2].toInt() and 0xFF else r
+                val a = if (bytesPerPixel > 3) rowData[offset + 3].toInt() and 0xFF else 0xFF
+                pixels[col] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+
+            bitmap.setPixels(pixels, 0, cropWidth, 0, row, cropWidth, 1)
+        }
+        return bitmap
     }
 
     /**
-     * Crops the top-right area that contains:
-     *
-     *   QT Demo  USD
-     *   46,563.80
-     *
-     * or:
-     *
-     *   QT Real  USD
-     *   12.40
-     *
-     * The ratios are based on the Pocket Option portrait layout and leave
-     * enough margin for different screen sizes / status bar heights.
+     * Cheap content hash of the cropped balance bitmap. A few hundred
+     * thousand pixels are scanned in a tight loop, which is far cheaper than
+     * a full ML Kit recognition pass.
      */
-    private fun cropBalanceRegion(bitmap: Bitmap): Bitmap {
-        val left = (bitmap.width * BALANCE_CROP_LEFT_RATIO).toInt()
-            .coerceIn(0, bitmap.width - 1)
-        val top = (bitmap.height * BALANCE_CROP_TOP_RATIO).toInt()
-            .coerceIn(0, bitmap.height - 1)
-        val right = (bitmap.width * BALANCE_CROP_RIGHT_RATIO).toInt()
-            .coerceIn(left + 1, bitmap.width)
-        val bottom = (bitmap.height * BALANCE_CROP_BOTTOM_RATIO).toInt()
-            .coerceIn(top + 1, bitmap.height)
-
-        Timber.d(
-            "Cropping balance region: left=$left, top=$top, " +
-                "right=$right, bottom=$bottom " +
-                "(${right - left}x${bottom - top})"
-        )
-
-        return try {
-            Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to crop balance region, using full frame")
-            bitmap
+    private fun contentHash(bitmap: Bitmap): Int {
+        val pixelCount = bitmap.width * bitmap.height
+        if (pixelCount <= 0) return 0
+        if (hashBuffer.size < pixelCount) {
+            hashBuffer = IntArray(pixelCount)
         }
+        bitmap.getPixels(hashBuffer, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+
+        var hash = 1
+        for (i in 0 until pixelCount) {
+            hash = 31 * hash + hashBuffer[i]
+        }
+        return hash
+    }
+
+    private fun getCachedResult(
+        hash: Int,
+        targetAccountType: BalanceResult.AccountType?
+    ): BalanceResult? {
+        val cached = lastCachedResult ?: return null
+        if (hash != lastFrameHash || targetAccountType != lastCachedTarget) return null
+
+        // Re-validate a valid result occasionally; retry an invalid one sooner
+        // in case ML Kit failed transiently.
+        val ttl = if (cached.isValid()) {
+            OCR_CACHE_VALID_TTL_MS
+        } else {
+            OCR_CACHE_INVALID_TTL_MS
+        }
+        if (System.currentTimeMillis() - lastFrameHashTime > ttl) return null
+        return cached
+    }
+
+    private fun cacheResult(
+        hash: Int,
+        targetAccountType: BalanceResult.AccountType?,
+        result: BalanceResult
+    ) {
+        lastFrameHash = hash
+        lastFrameHashTime = System.currentTimeMillis()
+        lastCachedTarget = targetAccountType
+        lastCachedResult = result
     }
 
     /**
@@ -270,6 +281,10 @@ class OcrProcessor {
         processingJob.cancel()
         textRecognizer?.close()
         textRecognizer = null
+        lastCachedResult = null
+        lastCachedTarget = null
+        lastFrameHash = 0
+        lastFrameHashTime = 0L
     }
 
     fun isInitialized(): Boolean {
@@ -284,10 +299,17 @@ class OcrProcessor {
         private const val TAG = "OcrProcessor"
         private const val OCR_TIMEOUT_SECONDS = 20L
 
-        // Top-right balance area (relative to the full screenshot).
+        // Reuse a cached OCR result while the crop is pixel-identical.
+        private const val OCR_CACHE_VALID_TTL_MS = 60_000L
+        private const val OCR_CACHE_INVALID_TTL_MS = 10_000L
+
+        // Top-right balance area (relative to the full screenshot). The
+        // right edge stops before the green wallet button and the bottom
+        // edge above the floating chart/chat badge, so their animations
+        // cannot invalidate the frame hash.
         private const val BALANCE_CROP_LEFT_RATIO = 0.42f
         private const val BALANCE_CROP_TOP_RATIO = 0.03f
-        private const val BALANCE_CROP_RIGHT_RATIO = 0.92f
-        private const val BALANCE_CROP_BOTTOM_RATIO = 0.14f
+        private const val BALANCE_CROP_RIGHT_RATIO = 0.83f
+        private const val BALANCE_CROP_BOTTOM_RATIO = 0.13f
     }
 }

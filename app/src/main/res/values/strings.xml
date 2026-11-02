@@ -36,6 +36,9 @@
     <string name="section_account_type_desc">Выберите, какой тип аккаунта искать на экране</string>
     <string name="section_screen_capture">Захват экрана</string>
     <string name="section_screen_capture_desc">Отслеживает выбранный тип аккаунта на экране и отправляет баланс в Apps Script</string>
+    <string name="section_update_speed">Скорость обновления</string>
+    <string name="fast_mode_title">Быстрый режим (до ~2 секунд)</string>
+    <string name="fast_mode_desc">Экран проверяется каждую секунду, OCR запускается только при изменении области баланса, а запись в таблицу — только когда сумма изменилась. Обычный режим: проверка раз в 10 секунд, запись раз в минуту. Для 6 часов трейдинга в день быстрый режим даёт умеренный расход батареи.</string>
     <string name="section_permissions">Разрешения и настройки</string>
     <string name="section_how_it_works">Как это работает</string>
 
@@ -59,6 +62,8 @@
     <string name="toast_web_app_url_required">Сначала укажите URL Apps Script</string>
     <string name="toast_invalid_web_app_url">Неверный URL. Должен начинаться с https://script.google.com/</string>
     <string name="toast_error_copied">Ошибка скопирована в буфер обмена</string>
+    <string name="toast_fast_mode_on">Быстрый режим включён: обновление до ~2 секунд</string>
+    <string name="toast_fast_mode_off">Обычный режим: обновление раз в минуту</string>
 
     <!-- Copy error button -->
     <string name="btn_copy_error">📋 Скопировать ошибку</string>
@@ -69,6 +74,7 @@
     <string name="notification_channel_description">Мониторинг баланса Pocket Option</string>
     <string name="notification_title">Pocket Option Helper активен</string>
     <string name="notification_text">Мониторинг баланса в фоне…</string>
+    <string name="notification_text_fast">Быстрый режим: мониторинг баланса…</string>
 
     <!-- Dialogs -->
     <string name="dialog_web_app_url_title">URL веб-приложения Apps Script</string>
@@ -76,4 +82,12 @@
     <string name="hint_web_app_url">https://script.google.com/macros/s/.../exec</string>
     <string name="btn_save">Сохранить</string>
     <string name="btn_cancel">Отмена</string>
+    <string name="btn_close">Закрыть</string>
+
+    <!-- Balance history -->
+    <string name="btn_history">История баланса</string>
+    <string name="btn_history_count">История баланса (%1$d)</string>
+    <string name="dialog_history_title">История баланса (%1$d)</string>
+    <string name="history_empty">История пока пуста. Записи появляются после успешной отправки баланса в таблицу.</string>
+    <string name="history_entry_format">%1$s USD · %2$s\n%3$s</string>
 </resources>

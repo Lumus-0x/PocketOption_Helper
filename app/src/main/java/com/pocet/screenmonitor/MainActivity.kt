@@ -13,7 +13,6 @@ import android.text.InputType
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -24,9 +23,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.pocet.screenmonitor.service.CaptureScheduler
 import com.pocet.screenmonitor.service.ScreenCaptureService
 import com.pocet.screenmonitor.di.ServiceEntryPoint
+import com.pocet.screenmonitor.util.BalanceHistoryStore
 import com.pocet.screenmonitor.util.BatteryOptimizationUtils
 import com.pocet.screenmonitor.util.PermissionUtils
 import dagger.hilt.android.AndroidEntryPoint
@@ -34,6 +35,9 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -54,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRequestPermissions: Button
     private lateinit var btnSetWebAppUrl: Button
     private lateinit var btnCopyError: Button
+    private lateinit var btnHistory: Button
+    private lateinit var switchFastMode: MaterialSwitch
     private lateinit var rgAccountType: RadioGroup
     private lateinit var rbReal: RadioButton
     private lateinit var rbDemo: RadioButton
@@ -159,6 +165,8 @@ class MainActivity : AppCompatActivity() {
         btnRequestPermissions = findViewById(R.id.btnRequestPermissions)
         btnSetWebAppUrl = findViewById(R.id.btnSetWebAppUrl)
         btnCopyError = findViewById(R.id.btnCopyError)
+        btnHistory = findViewById(R.id.btnHistory)
+        switchFastMode = findViewById(R.id.switchFastMode)
         rgAccountType = findViewById(R.id.rgAccountType)
         rbReal = findViewById(R.id.rbReal)
         rbDemo = findViewById(R.id.rbDemo)
@@ -169,6 +177,9 @@ class MainActivity : AppCompatActivity() {
         // Load saved Web App URL
         loadWebAppUrl()
 
+        // Load fast mode preference and listen for changes
+        loadFastModePreference()
+
         // Set listener for account type changes
         rgAccountType.setOnCheckedChangeListener { _, checkedId ->
             saveAccountTypePreference(checkedId)
@@ -176,6 +187,36 @@ class MainActivity : AppCompatActivity() {
 
         // Copy error button click listener
         btnCopyError.setOnClickListener { copyErrorToClipboard() }
+
+        updateHistoryButton()
+    }
+
+    private fun updateHistoryButton() {
+        if (!this::btnHistory.isInitialized) return
+        val count = BalanceHistoryStore.getAll(this).size
+        btnHistory.text = if (count > 0) {
+            getString(R.string.btn_history_count, count)
+        } else {
+            getString(R.string.btn_history)
+        }
+    }
+
+    private fun loadFastModePreference() {
+        val prefs = getSharedPreferences(ScreenCaptureService.PREFS_NAME, Context.MODE_PRIVATE)
+        switchFastMode.isChecked = prefs.getBoolean(ScreenCaptureService.PREF_KEY_FAST_MODE, true)
+
+        switchFastMode.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit()
+                .putBoolean(ScreenCaptureService.PREF_KEY_FAST_MODE, isChecked)
+                .apply()
+            Timber.d("Fast mode preference: $isChecked")
+
+            Toast.makeText(
+                this,
+                if (isChecked) R.string.toast_fast_mode_on else R.string.toast_fast_mode_off,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun initManagers() {
@@ -188,6 +229,38 @@ class MainActivity : AppCompatActivity() {
         btnTestConnection.setOnClickListener { testAppsScriptConnection() }
         btnRequestPermissions.setOnClickListener { requestAllPermissions() }
         btnSetWebAppUrl.setOnClickListener { showWebAppUrlDialog() }
+        btnHistory.setOnClickListener { showBalanceHistory() }
+    }
+
+    private fun showBalanceHistory() {
+        val entries = BalanceHistoryStore.getAll(this)
+
+        if (entries.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.dialog_history_title, 0))
+                .setMessage(R.string.history_empty)
+                .setPositiveButton(R.string.btn_close, null)
+                .show()
+            return
+        }
+
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
+        val historyText = entries.asReversed().joinToString("\n\n") { entry ->
+            val accountLabel = if (entry.accountType == "REAL") "QT Real" else "QT Demo"
+            val amountText = String.format(Locale.US, "%,.2f", entry.amount)
+            getString(
+                R.string.history_entry_format,
+                amountText,
+                accountLabel,
+                dateFormat.format(Date(entry.timestamp))
+            )
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.dialog_history_title, entries.size))
+            .setMessage(historyText)
+            .setPositiveButton(R.string.btn_close, null)
+            .show()
     }
 
     private fun checkPermissionsAndSetup() {
@@ -547,6 +620,7 @@ class MainActivity : AppCompatActivity() {
         // consent dialog closes are not lost while the activity is paused.
         updateServiceStatusUI()
         loadWebAppUrl()
+        updateHistoryButton()
     }
 
     override fun onDestroy() {

@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -27,6 +28,7 @@ import com.pocet.screenmonitor.MainActivity
 import com.pocet.screenmonitor.R
 import com.pocet.screenmonitor.di.ServiceEntryPoint
 import com.pocet.screenmonitor.model.BalanceResult
+import com.pocet.screenmonitor.util.BalanceHistoryStore
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -54,11 +56,17 @@ class ScreenCaptureService : Service() {
 
         const val PREFS_NAME = "capture_prefs"
         const val PREF_KEY_ACCOUNT_TYPE = "target_account_type"
+        const val PREF_KEY_FAST_MODE = "fast_mode_enabled"
 
         private const val NOTIFICATION_ID = 1001
-        private const val CHANNEL_ID = "screen_capture_channel"
+        private const val CHANNEL_ID = "screen_capture_channel_v2"
+        private const val LEGACY_CHANNEL_ID = "screen_capture_channel"
         private const val CAPTURE_INTERVAL_MS = 10_000L
+        private const val FAST_CAPTURE_INTERVAL_MS = 1_000L
         private const val MIN_WRITE_INTERVAL_MS = 60_000L
+        private const val FAST_MIN_WRITE_INTERVAL_MS = 2_000L
+        private const val FAST_RETRY_INTERVAL_MS = 5_000L
+        private const val NOTIFICATION_REFRESH_INTERVAL_MS = 60_000L
         private const val MAX_VD_RETRIES = 3
         private const val VD_RETRY_DELAY_MS = 500L
         private const val PROJECTION_START_DELAY_MS = 300L
@@ -99,6 +107,13 @@ class ScreenCaptureService : Service() {
     private var projectionSetupJob: Job? = null
     private var captureLoopJob: Job? = null
 
+    private val capturePrefs: SharedPreferences by lazy {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    @Volatile
+    private var fastMode = false
+
     @Volatile
     private var isCapturing = false
 
@@ -109,9 +124,40 @@ class ScreenCaptureService : Service() {
     private var lastSuccessfulWrite: Long = 0
 
     @Volatile
+    private var lastWriteAttempt: Long = 0
+
+    @Volatile
+    private var lastWrittenAmount: Double? = null
+
+    @Volatile
+    private var lastWrittenAccountType: BalanceResult.AccountType? = null
+
+    @Volatile
     private var writeInProgress = false
 
+    @Volatile
+    private var lastNotificationText: String = ""
+
+    @Volatile
+    private var lastNotificationRefresh: Long = 0
+
     private var targetAccountType: BalanceResult.AccountType = BalanceResult.AccountType.REAL
+
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == PREF_KEY_FAST_MODE) {
+            fastMode = capturePrefs.getBoolean(PREF_KEY_FAST_MODE, true)
+            Timber.d("Fast mode changed: $fastMode")
+            if (isCapturing) {
+                updateNotification(
+                    if (fastMode) {
+                        getString(R.string.notification_text_fast)
+                    } else {
+                        getString(R.string.notification_text)
+                    }
+                )
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -127,7 +173,7 @@ class ScreenCaptureService : Service() {
                 "density: ${displayMetrics?.densityDpi}"
         )
 
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = capturePrefs
         val accountTypeStr = prefs.getString(PREF_KEY_ACCOUNT_TYPE, "REAL") ?: "REAL"
         targetAccountType = try {
             BalanceResult.AccountType.valueOf(accountTypeStr)
@@ -136,6 +182,10 @@ class ScreenCaptureService : Service() {
             BalanceResult.AccountType.REAL
         }
         Timber.d("Target account type: $targetAccountType")
+
+        fastMode = prefs.getBoolean(PREF_KEY_FAST_MODE, true)
+        Timber.d("Fast mode: $fastMode")
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
 
         createNotificationChannel()
     }
@@ -341,9 +391,16 @@ class ScreenCaptureService : Service() {
 
         isCapturing = true
         isRunning = true
+        updateNotification(
+            if (fastMode) {
+                getString(R.string.notification_text_fast)
+            } else {
+                getString(R.string.notification_text)
+            }
+        )
         startCaptureLoop()
         sendCaptureBroadcast(ACTION_CAPTURE_STARTED)
-        Timber.d("Screen capture started successfully")
+        Timber.d("Screen capture started successfully (fastMode=$fastMode)")
     }
 
     private fun registerProjectionCallback(projection: MediaProjection) {
@@ -473,15 +530,50 @@ class ScreenCaptureService : Service() {
             Timber.d("Capture loop started")
             while (isActive && isCapturing) {
                 try {
+                    refreshNotificationIfNeeded()
                     captureAndProcessFrame()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Timber.e(e, "Error in capture loop")
                 }
-                delay(CAPTURE_INTERVAL_MS)
+                delayUntilNextCapture()
             }
             Timber.d("Capture loop ended")
+        }
+    }
+
+    /**
+     * Waits for the next capture tick. In normal mode the 10-second wait is
+     * split into 1-second chunks so enabling fast mode takes effect almost
+     * immediately instead of after the current long delay.
+     */
+    private suspend fun delayUntilNextCapture() {
+        if (fastMode) {
+            delay(FAST_CAPTURE_INTERVAL_MS)
+            return
+        }
+
+        var waited = 0L
+        while (isCapturing && !fastMode && waited < CAPTURE_INTERVAL_MS) {
+            delay(FAST_CAPTURE_INTERVAL_MS)
+            waited += FAST_CAPTURE_INTERVAL_MS
+        }
+    }
+
+    /**
+     * Some Android versions let the user swipe away a foreground-service
+     * notification. Re-post the same silent notification periodically so it
+     * stays present for the whole capture session.
+     */
+    private fun refreshNotificationIfNeeded() {
+        val text = lastNotificationText
+        if (text.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastNotificationRefresh >= NOTIFICATION_REFRESH_INTERVAL_MS) {
+            lastNotificationRefresh = now
+            updateNotification(text)
         }
     }
 
@@ -524,12 +616,34 @@ class ScreenCaptureService : Service() {
                 )
 
                 val now = System.currentTimeMillis()
-                if (now - lastSuccessfulWrite >= MIN_WRITE_INTERVAL_MS) {
+                val balanceChanged =
+                    result.amount != lastWrittenAmount ||
+                        result.accountType != lastWrittenAccountType
+                val minWriteInterval = if (fastMode) {
+                    FAST_MIN_WRITE_INTERVAL_MS
+                } else {
+                    MIN_WRITE_INTERVAL_MS
+                }
+                val enoughSinceSuccess = now - lastSuccessfulWrite >= minWriteInterval
+                val enoughSinceAttempt =
+                    !fastMode || now - lastWriteAttempt >= FAST_RETRY_INTERVAL_MS
+
+                val shouldWrite = if (fastMode) {
+                    // Fast mode: write only when the value actually changed.
+                    // This keeps Apps Script usage low and avoids duplicate
+                    // history entries while still reacting within ~2 seconds.
+                    balanceChanged && enoughSinceSuccess && enoughSinceAttempt
+                } else {
+                    enoughSinceSuccess
+                }
+
+                if (shouldWrite) {
                     writeToSheets(result)
                 } else {
                     Timber.d(
-                        "Skipping write - too soon since last write " +
-                            "(${now - lastSuccessfulWrite}ms)"
+                        "Skipping write - changed=$balanceChanged, " +
+                            "sinceSuccess=${now - lastSuccessfulWrite}ms, " +
+                            "sinceAttempt=${now - lastWriteAttempt}ms, fast=$fastMode"
                     )
                 }
             } else {
@@ -593,17 +707,27 @@ class ScreenCaptureService : Service() {
 
         val client = getAppsScriptClient() ?: return
         writeInProgress = true
+        lastWriteAttempt = System.currentTimeMillis()
 
         captureScope.launch {
             try {
                 val writeResult = client.sendBalance(result)
                 if (writeResult.isSuccess) {
                     lastSuccessfulWrite = System.currentTimeMillis()
+                    // Clear the retry gate: the 5-second delay is only meant
+                    // for failed writes, not for the next real balance change.
+                    lastWriteAttempt = 0L
+                    lastWrittenAmount = result.amount
+                    lastWrittenAccountType = result.accountType
+                    BalanceHistoryStore.add(applicationContext, result)
                     Timber.d("Successfully sent to Apps Script")
                     if (isCapturing) {
                         updateNotification("Balance synced: ${result.amount}")
                     }
                 } else {
+                    // Wait a full retry interval after a failed attempt,
+                    // even if the network call itself took a long time.
+                    lastWriteAttempt = System.currentTimeMillis()
                     Timber.e("Failed to send to Apps Script: ${writeResult.errorMessage}")
                     if (isCapturing) {
                         updateNotification("Sync failed: ${writeResult.errorMessage}")
@@ -612,6 +736,7 @@ class ScreenCaptureService : Service() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                lastWriteAttempt = System.currentTimeMillis()
                 Timber.e(e, "Error sending balance to Apps Script")
             } finally {
                 writeInProgress = false
@@ -709,20 +834,31 @@ class ScreenCaptureService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+
+        // Ongoing + NO_CLEAR keeps the notification in the shade while the
+        // capture service is alive, including "Clear all".
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
+        return notification
     }
 
     private fun updateNotification(text: String) {
+        lastNotificationText = text
+        lastNotificationRefresh = System.currentTimeMillis()
         try {
             val notification = buildNotification(text)
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -734,26 +870,28 @@ class ScreenCaptureService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                NotificationManager.IMPORTANCE_DEFAULT
-            } else {
-                NotificationManager.IMPORTANCE_LOW
-            }
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            // The old channel was created with IMPORTANCE_DEFAULT on Android
+            // 14+, which allowed sound/vibration on every notify() update.
+            // Recreate the channel as LOW and silent; a new ID is required
+            // because importance changes do not override an existing channel.
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.notification_channel_name),
-                importance
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = getString(R.string.notification_channel_description)
                 setShowBadge(false)
                 enableVibration(false)
+                setSound(null, null)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
-            Timber.d("Notification channel created with importance: $importance")
+            Timber.d("Silent notification channel created: $CHANNEL_ID")
         }
     }
 
@@ -773,6 +911,12 @@ class ScreenCaptureService : Service() {
 
         if (wasCapturing) {
             sendCaptureBroadcast(ACTION_CAPTURE_STOPPED)
+        }
+
+        try {
+            capturePrefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to unregister preference listener")
         }
 
         try {
