@@ -4,7 +4,52 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Green bullish candlestick (profit) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,20A34,34 0 1,0 54,88A34,34 0 1,0 54,20ZM54,32A22,22 0 1,1 54,76A22,22 0 1,1 54,32ZM44,54h20v4H44zM44,60h12v4H44z"/>
+        android:fillColor="#00C853"
+        android:pathData="M38,30 L38,78 M34,54 L42,54 M38,30 L38,38 M38,70 L38,78"
+        android:strokeWidth="4"
+        android:strokeColor="#00C853"
+        android:strokeLineCap="round" />
+
+    <!-- Green candlestick body -->
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M30,38 L46,38 L46,70 L30,70 Z" />
+
+    <!-- Red bearish candlestick (loss) - smaller, to the right -->
+    <path
+        android:fillColor="#FF1744"
+        android:pathData="M62,38 L78,38 L78,62 L62,62 Z" />
+    <path
+        android:fillColor="#FF1744"
+        android:pathData="M70,30 L70,38 M66,50 L74,50 M70,62 L70,78"
+        android:strokeWidth="4"
+        android:strokeColor="#FF1744"
+        android:strokeLineCap="round" />
+
+    <!-- Small green candle on far right (trend up) -->
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M86,44 L94,44 L94,60 L86,60 Z" />
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M90,36 L90,44 M88,52 L92,52 M90,60 L90,68"
+        android:strokeWidth="3"
+        android:strokeColor="#00C853"
+        android:strokeLineCap="round" />
+
+    <!-- Chart line connecting candles (trend line) -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M42,54 Q55,48 70,50 Q85,52 90,52"
+        android:strokeWidth="2.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Small dots on trend line -->
+    <circle android:cx="42" android:cy="54" android:r="3" android:fillColor="#FFFFFF" />
+    <circle android:cx="70" android:cy="50" android:r="3" android:fillColor="#FFFFFF" />
+    <circle android:cx="90" android:cy="52" android:r="3" android:fillColor="#FFFFFF" />
 </vector>

@@ -76,4 +76,12 @@
     <color name="on_warning">#000000</color>
     <color name="divider">#4A4451</color>
     <color name="transparent">#00000000</color>
+
+    <!-- Pocket Option inspired dark theme colors -->
+    <color name="po_dark_bg">#0F1419</color>
+    <color name="po_dark_surface">#1A1F25</color>
+    <color name="po_green">#00C853</color>
+    <color name="po_red">#FF1744</color>
+    <color name="po_teal">#00E676</color>
+    <color name="po_gold">#FFD600</color>
 </resources>
