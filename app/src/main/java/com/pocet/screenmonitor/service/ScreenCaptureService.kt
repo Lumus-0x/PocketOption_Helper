@@ -143,7 +143,7 @@ class ScreenCaptureService : Service() {
                             Timber.d("Getting MediaProjection from manager")
                             val projection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
                             if (projection != null) {
-                                Timber.d("MediaProjection created successfully, token: ${projection.token}")
+                                Timber.d("MediaProjection created successfully")
                                 startCapture(projection)
                             } else {
                                 Timber.e("Failed to create MediaProjection - returned null")
@@ -230,7 +230,7 @@ class ScreenCaptureService : Service() {
     }
 
     private fun startCapture(projection: MediaProjection) {
-        Timber.d("Starting screen capture, projection token: ${projection.token}")
+        Timber.d("Starting screen capture")
         mediaProjection = projection
         consecutiveFailures = 0
 
@@ -404,16 +404,10 @@ class ScreenCaptureService : Service() {
     }
 
     private fun isProjectionValid(projection: MediaProjection): Boolean {
-        try {
-            // Check if projection has a valid token
-            val tokenField = MediaProjection::class.java.getDeclaredField("mToken")
-            tokenField.isAccessible = true
-            val token = tokenField.get(projection)
-            return token != null
-        } catch (e: Exception) {
-            Timber.w("Could not verify projection token: ${e.message}")
-            return true // Assume valid if we can't check
-        }
+        // MediaProjection doesn't expose a public validity check
+        // The callback onStop() will notify us when it's stopped by system
+        // We assume it's valid if we got it from MediaProjectionManager
+        return true
     }
 
     private fun verifyCaptureWorks(): Boolean {
