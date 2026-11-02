@@ -431,14 +431,18 @@ class ScreenCaptureService : Service() {
         }
 
         if (image != null) {
-            Timber.d("Capture verification SUCCESS: Got frame ${image.width}x${image.height}, format=${image.format}")
-            image.close()
-            lastSuccessfulCaptureTime = System.currentTimeMillis()
-            return true
-        } else {
-            Timber.e("Capture verification FAILED: No frame acquired within ${TEST_CAPTURE_TIMEOUT_MS}ms")
-            return false
+            if (isImageValid(image)) {
+                Timber.d("Capture verification SUCCESS: Got frame ${image.width}x${image.height}, format=${image.format}")
+                lastSuccessfulCaptureTime = System.currentTimeMillis()
+                safeCloseImage(image)
+                return true
+            } else {
+                Timber.w("Capture verification: Got invalid frame")
+                safeCloseImage(image)
+            }
         }
+        Timber.e("Capture verification FAILED: No valid frame acquired within ${TEST_CAPTURE_TIMEOUT_MS}ms")
+        return false
     }
 
     private fun startCaptureLoop() {
@@ -508,6 +512,14 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        // Validate image before processing (prevents mali_gralloc invalid lock errors)
+        if (!isImageValid(image)) {
+            Timber.w("Invalid image acquired, skipping")
+            consecutiveFailures++
+            safeCloseImage(image)
+            return
+        }
+
         lastSuccessfulCaptureTime = System.currentTimeMillis()
         Timber.d("Captured frame: ${image.width}x${image.height}, format=${image.format}, planes=${image.planes.size}")
 
@@ -528,8 +540,60 @@ class ScreenCaptureService : Service() {
             } else {
                 Timber.d("No valid balance detected: ${result.accountType}, confidence: ${result.confidence}, rawText: ${result.rawText?.take(100)}")
             }
+        } catch (e: Exception) {
+            Timber.e(e, "Error processing frame")
+            consecutiveFailures++
         } finally {
-            image.close()
+            safeCloseImage(image)
+        }
+    }
+
+    /**
+     * Validates image buffer before processing to prevent mali_gralloc errors
+     */
+    private fun isImageValid(image: Image): Boolean {
+        return try {
+            // Check basic properties
+            if (image.width <= 0 || image.height <= 0) return false
+            if (image.format <= 0) return false
+
+            // Check planes are accessible
+            val planes = image.planes
+            if (planes.isEmpty()) return false
+
+            // Verify each plane has valid buffer
+            for (plane in planes) {
+                val buffer = plane.buffer
+                if (buffer == null) return false
+                // Try to access buffer without modifying position
+                buffer.rewind()
+            }
+            return true
+        } catch (e: Exception) {
+            Timber.w(e, "Image validation failed")
+            return false
+        }
+    }
+
+    /**
+     * Safely closes image with error handling for mali_gralloc issues
+     */
+    private fun safeCloseImage(image: Image?) {
+        image?.let {
+            try {
+                it.close()
+            } catch (e: IllegalStateException) {
+                // Ignore "buffer already freed" or "invalid lock" errors
+                if (e.message?.contains("invalid write locks") == true ||
+                    e.message?.contains("already freed") == true ||
+                    e.message?.contains("not locked") == true) {
+                    Timber.w("Image close ignored (buffer state): ${e.message}")
+                } else {
+                    Timber.e(e, "Error closing image")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Unexpected error closing image")
+            }
         }
     }
 
