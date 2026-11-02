@@ -49,6 +49,7 @@ class OcrProcessor {
     /**
      * Process an ImageProxy from ImageReader and return BalanceResult
      * @param targetAccountType If specified, only look for this account type. If null, detect both.
+     * Note: Caller is responsible for closing the image
      */
     suspend fun processImage(image: Image, targetAccountType: BalanceResult.AccountType? = null): BalanceResult = withContext(Dispatchers.IO) {
         if (isProcessing) {
@@ -60,7 +61,6 @@ class OcrProcessor {
         if (recognizer == null) {
             val error = initError ?: "OCR not initialized"
             Timber.e("TextRecognizer not available: $error")
-            image.close()
             return@withContext BalanceResult.unknown(error)
         }
 
@@ -99,7 +99,7 @@ class OcrProcessor {
             BalanceResult.unknown("Error: ${e.message}")
         } finally {
             isProcessing = false
-            image.close()
+            // NOTE: Caller (ScreenCaptureService) is responsible for closing the image
         }
     }
 
