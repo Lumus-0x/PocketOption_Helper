@@ -238,14 +238,15 @@ sequenceDiagram
 2. Удали код по умолчанию и вставь код ниже.
 3. Нажми **Сохранить** (Ctrl+S).
 
-<details>
-<summary><b>Показать код Apps Script</b></summary>
+Код также лежит отдельным файлом: **[`apps_script/Code.gs`](apps_script/Code.gs)** — можно открыть и скопировать целиком.
 
 ```javascript
 /**
  * Pocket Option Helper → Google Sheets
  * Лист: Plan_30_days
  * Приложение присылает: { date: "DD.MM.YYYY", amount: 1234.56, accountType: "REAL" }
+ *
+ * Как подключить — см. README.md, раздел «Шаг 2. Добавь Apps Script».
  */
 function doPost(e) {
   try {
@@ -297,8 +298,6 @@ function doGet() {
   return ContentService.createTextOutput('Pocket Option Helper: OK');
 }
 ```
-
-</details>
 
 ### Шаг 3. Разверни Web App
 
