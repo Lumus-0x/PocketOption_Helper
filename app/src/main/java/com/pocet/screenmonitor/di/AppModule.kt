@@ -21,8 +21,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOcrProcessor(): OcrProcessor {
-        return OcrProcessor()
+    fun provideOcrProcessor(@ApplicationContext context: Context): OcrProcessor {
+        return OcrProcessor(context)
     }
 
     @Provides

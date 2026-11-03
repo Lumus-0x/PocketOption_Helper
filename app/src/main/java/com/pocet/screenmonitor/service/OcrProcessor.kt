@@ -15,6 +15,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.pocet.screenmonitor.model.BalanceResult
+import com.pocet.screenmonitor.util.DeviceUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,7 +24,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
-class OcrProcessor {
+class OcrProcessor(private val context: Context) {
 
     // Nullable TextRecognizer - initialization failure won't crash the app
     private var textRecognizer: TextRecognizer? = null
@@ -41,7 +42,14 @@ class OcrProcessor {
     private var lastCachedResult: BalanceResult? = null
     private var lastCachedTarget: BalanceResult.AccountType? = null
 
+    // Device-specific crop ratios and max dimension
+    private val cropRatios = DeviceUtils.getOptimalCropRatios(context)
+    private val maxBitmapDimension = DeviceUtils.getMaxBitmapDimension(context)
+
     init {
+        Timber.d("OcrProcessor initialized for device: ${DeviceUtils.getDeviceCategory(context)}, " +
+            "crop ratios: L=${cropRatios.left}, T=${cropRatios.top}, R=${cropRatios.right}, B=${cropRatios.bottom}, " +
+            "maxBitmapDimension=$maxBitmapDimension")
         initializeTextRecognizer()
     }
 
@@ -145,6 +153,9 @@ class OcrProcessor {
      * Reading the crop directly from the plane buffer is important in fast
      * mode: creating a full-screen Bitmap every second would copy 10+ MB per
      * frame and cause unnecessary GC and battery pressure.
+     *
+     * Uses device-specific crop ratios from DeviceUtils for optimal
+     * compatibility with phones, tablets, and different orientations.
      */
     private fun imageToBalanceBitmap(image: Image): Bitmap? {
         val planes = image.planes
@@ -164,13 +175,14 @@ class OcrProcessor {
             return null
         }
 
-        val left = (width * BALANCE_CROP_LEFT_RATIO).toInt()
+        // Use device-specific crop ratios
+        val left = (width * cropRatios.left).toInt()
             .coerceIn(0, width - 1)
-        val top = (height * BALANCE_CROP_TOP_RATIO).toInt()
+        val top = (height * cropRatios.top).toInt()
             .coerceIn(0, height - 1)
-        val right = (width * BALANCE_CROP_RIGHT_RATIO).toInt()
+        val right = (width * cropRatios.right).toInt()
             .coerceIn(left + 1, width)
-        val bottom = (height * BALANCE_CROP_BOTTOM_RATIO).toInt()
+        val bottom = (height * cropRatios.bottom).toInt()
             .coerceIn(top + 1, height)
         val cropWidth = right - left
         val cropHeight = bottom - top
@@ -255,20 +267,22 @@ class OcrProcessor {
     }
 
     /**
-     * Downscale bitmap for faster OCR processing
+     * Downscale bitmap for faster OCR processing.
+     * Uses device-specific max dimension from DeviceUtils for optimal quality/performance balance.
      */
-    fun downscaleBitmap(bitmap: Bitmap, maxDimension: Int = 1920): Bitmap {
+    fun downscaleBitmap(bitmap: Bitmap, maxDimension: Int = -1): Bitmap {
+        val effectiveMaxDimension = if (maxDimension > 0) maxDimension else maxBitmapDimension
         val width = bitmap.width
         val height = bitmap.height
 
-        if (width <= maxDimension && height <= maxDimension) {
+        if (width <= effectiveMaxDimension && height <= effectiveMaxDimension) {
             return bitmap
         }
 
         val scale = if (width > height) {
-            maxDimension.toFloat() / width
+            effectiveMaxDimension.toFloat() / width
         } else {
-            maxDimension.toFloat() / height
+            effectiveMaxDimension.toFloat() / height
         }
 
         val newWidth = (width * scale).toInt()
@@ -302,14 +316,5 @@ class OcrProcessor {
         // Reuse a cached OCR result while the crop is pixel-identical.
         private const val OCR_CACHE_VALID_TTL_MS = 60_000L
         private const val OCR_CACHE_INVALID_TTL_MS = 10_000L
-
-        // Top-right balance area (relative to the full screenshot). The
-        // right edge stops before the green wallet button and the bottom
-        // edge above the floating chart/chat badge, so their animations
-        // cannot invalidate the frame hash.
-        private const val BALANCE_CROP_LEFT_RATIO = 0.42f
-        private const val BALANCE_CROP_TOP_RATIO = 0.03f
-        private const val BALANCE_CROP_RIGHT_RATIO = 0.83f
-        private const val BALANCE_CROP_BOTTOM_RATIO = 0.13f
     }
 }

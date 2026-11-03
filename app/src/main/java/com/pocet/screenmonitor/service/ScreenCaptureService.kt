@@ -93,7 +93,7 @@ class ScreenCaptureService : Service() {
     private var displayMetrics: DisplayMetrics? = null
     private var windowManager: WindowManager? = null
 
-    private val ocrProcessor = OcrProcessor()
+    private val ocrProcessor = OcrProcessor(this)
 
     // These scopes live for the whole service instance. Individual jobs are
     // cancelled when capture stops; the parent scopes are only cancelled in
