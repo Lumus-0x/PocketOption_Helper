@@ -1,106 +1,106 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- ============================================================
-         LIGHT THEME COLORS (values-night = light mode)
-         Pocket Option inspired light theme with trading colors
+         DARK THEME COLORS (values-night = forced dark mode)
+         Same dark theme as default - Pocket Option inspired
          ============================================================ -->
 
-    <!-- Semantic Colors (referenced by themes) - LIGHT MODE -->
+    <!-- Semantic Colors (referenced by themes) - DARK MODE (forced) -->
     <!-- Primary = Green (profit/success) -->
-    <color name="colorPrimary">@color/po_light_green</color>
-    <color name="colorPrimaryVariant">@color/po_light_green</color>
+    <color name="colorPrimary">@color/po_green</color>
+    <color name="colorPrimaryVariant">@color/po_green_light</color>
     <color name="colorOnPrimary">@color/po_white</color>
-    <color name="colorPrimaryContainer">@color/po_light_green_dim</color>
-    <color name="colorOnPrimaryContainer">@color/po_dark_bg</color>
+    <color name="colorPrimaryContainer">@color/po_green_dim</color>
+    <color name="colorOnPrimaryContainer">@color/po_white</color>
 
     <!-- Secondary = Gold (warning/pending) -->
-    <color name="colorSecondary">@color/po_light_gold</color>
-    <color name="colorSecondaryVariant">@color/po_light_gold_dim</color>
-    <color name="colorOnSecondary">@color/po_white</color>
-    <color name="colorSecondaryContainer">@color/po_light_gold_dim</color>
+    <color name="colorSecondary">@color/po_gold</color>
+    <color name="colorSecondaryVariant">@color/po_gold_dim</color>
+    <color name="colorOnSecondary">@color/po_dark_bg</color>
+    <color name="colorSecondaryContainer">@color/po_gold_dim</color>
     <color name="colorOnSecondaryContainer">@color/po_dark_bg</color>
 
     <!-- Tertiary = Red (loss/error) -->
-    <color name="colorTertiary">@color/po_light_red</color>
+    <color name="colorTertiary">@color/po_red</color>
     <color name="colorOnTertiary">@color/po_white</color>
-    <color name="colorTertiaryContainer">@color/po_light_red_dim</color>
+    <color name="colorTertiaryContainer">@color/po_red_dim</color>
     <color name="colorOnTertiaryContainer">@color/po_white</color>
 
     <!-- Error -->
-    <color name="colorError">@color/po_light_red</color>
+    <color name="colorError">@color/po_red</color>
     <color name="colorOnError">@color/po_white</color>
-    <color name="colorErrorContainer">@color/po_light_red_dim</color>
+    <color name="colorErrorContainer">@color/po_red_dim</color>
     <color name="colorOnErrorContainer">@color/po_white</color>
 
     <!-- Surface -->
-    <color name="colorSurface">@color/po_light_surface</color>
-    <color name="colorOnSurface">@color/po_light_on_surface</color>
-    <color name="colorSurfaceVariant">@color/po_light_surface_variant</color>
-    <color name="colorOnSurfaceVariant">@color/po_light_on_surface_variant</color>
-    <color name="colorOutline">@color/po_light_outline</color>
-    <color name="colorOutlineVariant">@color/po_light_outline</color>
+    <color name="colorSurface">@color/po_dark_surface</color>
+    <color name="colorOnSurface">@color/po_white</color>
+    <color name="colorSurfaceVariant">@color/po_dark_surface_variant</color>
+    <color name="colorOnSurfaceVariant">@color/po_white_muted</color>
+    <color name="colorOutline">@color/po_dark_outline</color>
+    <color name="colorOutlineVariant">@color/po_dark_outline</color>
 
     <!-- Background -->
-    <color name="colorBackground">@color/po_light_bg</color>
-    <color name="colorOnBackground">@color/po_light_on_surface</color>
+    <color name="colorBackground">@color/po_dark_bg</color>
+    <color name="colorOnBackground">@color/po_white</color>
 
     <!-- Inverse -->
-    <color name="colorInverseSurface">@color/po_dark_bg</color>
-    <color name="colorInverseOnSurface">@color/po_white</color>
+    <color name="colorInverseSurface">@color/po_white</color>
+    <color name="colorInverseOnSurface">@color/po_dark_bg</color>
     <color name="colorInversePrimary">@color/po_green</color>
 
     <!-- Shadow & Scrim -->
     <color name="colorShadow">#000000</color>
     <color name="colorScrim">#000000</color>
-    <color name="colorSurfaceTint">@color/po_light_green</color>
+    <color name="colorSurfaceTint">@color/po_green</color>
 
-    <!-- Status-specific colors (Light) -->
-    <color name="status_running_bg">@color/po_light_green_dim</color>
-    <color name="status_running_text">@color/po_light_green</color>
-    <color name="status_running_border">@color/po_light_green</color>
-    <color name="status_stopped_bg">@color/po_light_surface_variant</color>
-    <color name="status_stopped_text">@color/po_light_on_surface_muted</color>
-    <color name="status_stopped_border">@color/po_light_outline</color>
-    <color name="status_error_bg">@color/po_light_red_dim</color>
-    <color name="status_error_text">@color/po_light_red</color>
-    <color name="status_error_border">@color/po_light_red</color>
-    <color name="status_starting_bg">@color/po_light_gold_dim</color>
-    <color name="status_starting_text">@color/po_light_gold</color>
-    <color name="status_starting_border">@color/po_light_gold</color>
-    <color name="status_permission_bg">@color/po_light_gold_dim</color>
-    <color name="status_permission_text">@color/po_light_gold</color>
-    <color name="status_permission_border">@color/po_light_gold</color>
-    <color name="status_webapp_bg">@color/po_light_gold_dim</color>
-    <color name="status_webapp_text">@color/po_light_gold</color>
-    <color name="status_webapp_border">@color/po_light_gold</color>
-    <color name="status_testing_bg">@color/po_light_gold_dim</color>
-    <color name="status_testing_text">@color/po_light_gold</color>
-    <color name="status_testing_border">@color/po_light_gold</color>
-    <color name="status_success_bg">@color/po_light_green_dim</color>
-    <color name="status_success_text">@color/po_light_green</color>
-    <color name="status_success_border">@color/po_light_green</color>
-    <color name="status_connection_error_bg">@color/po_light_red_dim</color>
-    <color name="status_connection_error_text">@color/po_light_red</color>
-    <color name="status_connection_error_border">@color/po_light_red</color>
+    <!-- Status-specific colors (Dark) -->
+    <color name="status_running_bg">@color/po_green_dim</color>
+    <color name="status_running_text">@color/po_green_light</color>
+    <color name="status_running_border">@color/po_green</color>
+    <color name="status_stopped_bg">@color/po_dark_surface_variant</color>
+    <color name="status_stopped_text">@color/po_white_muted</color>
+    <color name="status_stopped_border">@color/po_dark_outline</color>
+    <color name="status_error_bg">@color/po_red_dim</color>
+    <color name="status_error_text">@color/po_red_light</color>
+    <color name="status_error_border">@color/po_red</color>
+    <color name="status_starting_bg">@color/po_gold_dim</color>
+    <color name="status_starting_text">@color/po_gold</color>
+    <color name="status_starting_border">@color/po_gold</color>
+    <color name="status_permission_bg">@color/po_gold_dim</color>
+    <color name="status_permission_text">@color/po_gold</color>
+    <color name="status_permission_border">@color/po_gold</color>
+    <color name="status_webapp_bg">@color/po_gold_dim</color>
+    <color name="status_webapp_text">@color/po_gold</color>
+    <color name="status_webapp_border">@color/po_gold</color>
+    <color name="status_testing_bg">@color/po_gold_dim</color>
+    <color name="status_testing_text">@color/po_gold</color>
+    <color name="status_testing_border">@color/po_gold</color>
+    <color name="status_success_bg">@color/po_green_dim</color>
+    <color name="status_success_text">@color/po_green_light</color>
+    <color name="status_success_border">@color/po_green</color>
+    <color name="status_connection_error_bg">@color/po_red_dim</color>
+    <color name="status_connection_error_text">@color/po_red_light</color>
+    <color name="status_connection_error_border">@color/po_red</color>
 
     <!-- Legacy color names -->
-    <color name="primary">@color/po_light_green</color>
-    <color name="primary_variant">@color/po_light_green</color>
+    <color name="primary">@color/po_green</color>
+    <color name="primary_variant">@color/po_green_light</color>
     <color name="on_primary">@color/po_white</color>
-    <color name="secondary">@color/po_light_gold</color>
-    <color name="secondary_variant">@color/po_light_gold_dim</color>
-    <color name="on_secondary">@color/po_white</color>
-    <color name="surface">@color/po_light_surface</color>
-    <color name="on_surface">@color/po_light_on_surface</color>
-    <color name="on_surface_variant">@color/po_light_on_surface_variant</color>
-    <color name="background">@color/po_light_bg</color>
-    <color name="on_background">@color/po_light_on_surface</color>
-    <color name="error">@color/po_light_red</color>
+    <color name="secondary">@color/po_gold</color>
+    <color name="secondary_variant">@color/po_gold_dim</color>
+    <color name="on_secondary">@color/po_dark_bg</color>
+    <color name="surface">@color/po_dark_surface</color>
+    <color name="on_surface">@color/po_white</color>
+    <color name="on_surface_variant">@color/po_white_muted</color>
+    <color name="background">@color/po_dark_bg</color>
+    <color name="on_background">@color/po_white</color>
+    <color name="error">@color/po_red</color>
     <color name="on_error">@color/po_white</color>
-    <color name="success">@color/po_light_green</color>
+    <color name="success">@color/po_green</color>
     <color name="on_success">@color/po_white</color>
-    <color name="warning">@color/po_light_gold</color>
+    <color name="warning">@color/po_gold</color>
     <color name="on_warning">@color/po_dark_bg</color>
-    <color name="divider">@color/po_light_outline</color>
+    <color name="divider">@color/po_dark_outline</color>
     <color name="transparent">#00000000</color>
 </resources>
