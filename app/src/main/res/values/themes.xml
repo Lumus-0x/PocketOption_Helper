@@ -279,7 +279,7 @@
     <!-- ============================================================
          CHIP STYLE (for status badge)
          ============================================================ -->
-    <style name="Widget.ScreenMonitor.Chip.Status" parent="Widget.Material3.Chip">
+    <style name="Widget.ScreenMonitor.Chip.Status" parent="Widget.MaterialComponents.Chip">
         <item name="chipCornerRadius">20dp</item>
         <item name="android:paddingHorizontal">16dp</item>
         <item name="android:paddingVertical">8dp</item>
