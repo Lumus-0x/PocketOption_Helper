@@ -93,7 +93,7 @@ class ScreenCaptureService : Service() {
     private var displayMetrics: DisplayMetrics? = null
     private var windowManager: WindowManager? = null
 
-    private val ocrProcessor = OcrProcessor(this)
+    private lateinit var ocrProcessor: OcrProcessor
 
     // These scopes live for the whole service instance. Individual jobs are
     // cancelled when capture stops; the parent scopes are only cancelled in
@@ -165,6 +165,9 @@ class ScreenCaptureService : Service() {
             "ScreenCaptureService onCreate - PID: ${android.os.Process.myPid()}, " +
                 "SDK: ${Build.VERSION.SDK_INT}"
         )
+
+        // Initialize OcrProcessor after Service context is ready
+        ocrProcessor = OcrProcessor(this)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         displayMetrics = readDisplayMetrics()
