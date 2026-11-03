@@ -79,8 +79,6 @@
         <item name="buttonStyle">@style/Widget.ScreenMonitor.Button</item>
         <item name="materialButtonStyle">@style/Widget.ScreenMonitor.Button.Filled</item>
         <item name="materialButtonOutlinedStyle">@style/Widget.ScreenMonitor.Button.Outlined</item>
-        <item name="materialButtonTonalStyle">@style/Widget.ScreenMonitor.Button.Tonal</item>
-        <item name="materialButtonTextStyle">@style/Widget.ScreenMonitor.Button.Text</item>
     </style>
 
     <!-- ============================================================
@@ -281,7 +279,7 @@
     <!-- ============================================================
          CHIP STYLE (for status badge)
          ============================================================ -->
-    <style name="Widget.ScreenMonitor.Chip.Status" parent="Widget.Material3.Chip.AssistChip">
+    <style name="Widget.ScreenMonitor.Chip.Status" parent="Widget.Material3.Chip">
         <item name="chipCornerRadius">20dp</item>
         <item name="android:paddingHorizontal">16dp</item>
         <item name="android:paddingVertical">8dp</item>
