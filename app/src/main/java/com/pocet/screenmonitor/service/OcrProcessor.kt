@@ -1,5 +1,6 @@
 package com.pocet.screenmonitor.service
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.graphics.Rect
