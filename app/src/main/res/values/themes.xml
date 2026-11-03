@@ -1,56 +1,94 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- ============================================================
+         POCKET OPTION HELPER - MATERIAL 3 THEME
+         Dark-first design with trading-inspired color palette
+         ============================================================ -->
+
     <!-- Base application theme - Material 3 (No ActionBar) -->
     <style name="Theme.ScreenMonitor" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Primary brand color -->
-        <item name="colorPrimary">@color/md_theme_light_primary</item>
-        <item name="colorPrimaryVariant">@color/md_theme_light_primaryContainer</item>
-        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
+        <!-- Primary brand color (Green - profit/success) -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorPrimaryContainer">@color/colorPrimaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/colorOnPrimaryContainer</item>
 
-        <!-- Secondary brand color -->
-        <item name="colorSecondary">@color/md_theme_light_secondary</item>
-        <item name="colorSecondaryVariant">@color/md_theme_light_secondaryContainer</item>
-        <item name="colorOnSecondary">@color/md_theme_light_onSecondary</item>
+        <!-- Secondary brand color (Gold - warning/pending) -->
+        <item name="colorSecondary">@color/colorSecondary</item>
+        <item name="colorSecondaryVariant">@color/colorSecondaryVariant</item>
+        <item name="colorOnSecondary">@color/colorOnSecondary</item>
+        <item name="colorSecondaryContainer">@color/colorSecondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/colorOnSecondaryContainer</item>
 
-        <!-- Tertiary brand color (Material 3) -->
-        <item name="colorTertiary">@color/md_theme_light_tertiary</item>
-        <item name="colorOnTertiary">@color/md_theme_light_onTertiary</item>
+        <!-- Tertiary brand color (Red - loss/error) -->
+        <item name="colorTertiary">@color/colorTertiary</item>
+        <item name="colorOnTertiary">@color/colorOnTertiary</item>
+        <item name="colorTertiaryContainer">@color/colorTertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/colorOnTertiaryContainer</item>
 
         <!-- Error color -->
-        <item name="colorError">@color/md_theme_light_error</item>
-        <item name="colorOnError">@color/md_theme_light_onError</item>
+        <item name="colorError">@color/colorError</item>
+        <item name="colorOnError">@color/colorOnError</item>
+        <item name="colorErrorContainer">@color/colorErrorContainer</item>
+        <item name="colorOnErrorContainer">@color/colorOnErrorContainer</item>
 
         <!-- Surface colors -->
-        <item name="colorSurface">@color/md_theme_light_surface</item>
-        <item name="colorOnSurface">@color/md_theme_light_onSurface</item>
-        <item name="colorSurfaceVariant">@color/md_theme_light_surfaceVariant</item>
-        <item name="colorOnSurfaceVariant">@color/md_theme_light_onSurfaceVariant</item>
-        <item name="colorOutline">@color/md_theme_light_outline</item>
-        <item name="colorOutlineVariant">@color/md_theme_light_outlineVariant</item>
+        <item name="colorSurface">@color/colorSurface</item>
+        <item name="colorOnSurface">@color/colorOnSurface</item>
+        <item name="colorSurfaceVariant">@color/colorSurfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
+        <item name="colorOutline">@color/colorOutline</item>
+        <item name="colorOutlineVariant">@color/colorOutlineVariant</item>
 
         <!-- Background -->
-        <item name="android:colorBackground">@color/md_theme_light_background</item>
-        <item name="android:windowBackground">@color/md_theme_light_background</item>
+        <item name="android:colorBackground">@color/colorBackground</item>
+        <item name="android:windowBackground">@color/colorBackground</item>
 
         <!-- Status bar color -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightNavigationBar">false</item>
 
         <!-- Enable edge-to-edge -->
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
-        <!-- Customize your theme here -->
+        <!-- Customize shape appearances -->
         <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.ScreenMonitor.Small</item>
         <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.ScreenMonitor.Medium</item>
         <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.ScreenMonitor.Large</item>
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.ScreenMonitor.ExtraLarge</item>
+
+        <!-- Material 3 Typography -->
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.ScreenMonitor.HeadlineSmall</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ScreenMonitor.TitleMedium</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ScreenMonitor.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ScreenMonitor.BodyMedium</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ScreenMonitor.LabelLarge</item>
+
+        <!-- Switch style -->
+        <item name="materialSwitchStyle">@style/Widget.ScreenMonitor.CompoundButton.MaterialSwitch</item>
+
+        <!-- Radio button style -->
+        <item name="radioButtonStyle">@style/Widget.ScreenMonitor.CompoundButton.RadioButton</item>
+
+        <!-- Card view style -->
+        <item name="materialCardViewStyle">@style/Widget.ScreenMonitor.CardView</item>
+
+        <!-- Button styles -->
+        <item name="buttonStyle">@style/Widget.ScreenMonitor.Button</item>
+        <item name="materialButtonStyle">@style/Widget.ScreenMonitor.Button.Filled</item>
+        <item name="materialButtonOutlinedStyle">@style/Widget.ScreenMonitor.Button.Outlined</item>
+        <item name="materialButtonTonalStyle">@style/Widget.ScreenMonitor.Button.Tonal</item>
+        <item name="materialButtonTextStyle">@style/Widget.ScreenMonitor.Button.Text</item>
     </style>
 
-    <!-- Shape appearances for Material 3 -->
+    <!-- ============================================================
+         SHAPE APPEARANCES
+         ============================================================ -->
     <style name="ShapeAppearance.ScreenMonitor.Small" parent="ShapeAppearance.MaterialComponents.SmallComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">4dp</item>
+        <item name="cornerSize">8dp</item>
     </style>
 
     <style name="ShapeAppearance.ScreenMonitor.Medium" parent="ShapeAppearance.MaterialComponents.MediumComponent">
@@ -65,63 +103,208 @@
 
     <style name="ShapeAppearance.ScreenMonitor.ExtraLarge" parent="ShapeAppearance.MaterialComponents.LargeComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">28dp</item>
+        <item name="cornerSize">24dp</item>
     </style>
 
-    <!-- Button styles (Material 3) -->
-    <style name="Widget.ScreenMonitor.Button.Filled" parent="Widget.Material3.Button">
+    <!-- ============================================================
+         BUTTON STYLES
+         ============================================================ -->
+    <!-- Base button style -->
+    <style name="Widget.ScreenMonitor.Button" parent="Widget.Material3.Button">
         <item name="cornerRadius">12dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:paddingVertical">16dp</item>
+        <item name="android:paddingVertical">14dp</item>
+        <item name="android:paddingHorizontal">24dp</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="rippleColor">?attr/colorOnPrimary</item>
     </style>
 
+    <!-- Filled button (Primary action) - Green -->
+    <style name="Widget.ScreenMonitor.Button.Filled" parent="Widget.ScreenMonitor.Button">
+        <item name="backgroundTint">?attr/colorPrimary</item>
+        <item name="android:textColor">?attr/colorOnPrimary</item>
+        <item name="iconTint">?attr/colorOnPrimary</item>
+        <item name="rippleColor">?attr/colorOnPrimary</item>
+        <item name="elevation">2dp</item>
+        <item name="android:stateListAnimator">@anim/button_elevation</item>
+    </style>
+
+    <!-- Outlined button (Secondary action) -->
     <style name="Widget.ScreenMonitor.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
         <item name="cornerRadius">12dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:paddingVertical">16dp</item>
+        <item name="android:paddingVertical">14dp</item>
+        <item name="android:paddingHorizontal">24dp</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
         <item name="strokeWidth">2dp</item>
+        <item name="strokeColor">?attr/colorPrimary</item>
+        <item name="android:textColor">?attr/colorPrimary</item>
+        <item name="iconTint">?attr/colorPrimary</item>
+        <item name="rippleColor">?attr/colorPrimary</item>
     </style>
 
+    <!-- Tonal button (Tertiary/Alternative action) -->
     <style name="Widget.ScreenMonitor.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
         <item name="cornerRadius">12dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:paddingVertical">16dp</item>
+        <item name="android:paddingVertical">14dp</item>
+        <item name="android:paddingHorizontal">24dp</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="backgroundTint">?attr/colorSecondaryContainer</item>
+        <item name="android:textColor">?attr/colorOnSecondaryContainer</item>
+        <item name="iconTint">?attr/colorOnSecondaryContainer</item>
+        <item name="rippleColor">?attr/colorOnSecondaryContainer</item>
+        <item name="elevation">0dp</item>
     </style>
 
-    <!-- Card style (MaterialComponents) -->
+    <!-- Text button -->
+    <style name="Widget.ScreenMonitor.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:paddingVertical">10dp</item>
+        <item name="android:paddingHorizontal">16dp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">?attr/colorPrimary</item>
+        <item name="iconTint">?attr/colorPrimary</item>
+        <item name="rippleColor">?attr/colorPrimary</item>
+    </style>
+
+    <!-- ============================================================
+         CARD VIEW STYLE
+         ============================================================ -->
     <style name="Widget.ScreenMonitor.CardView" parent="Widget.MaterialComponents.CardView">
         <item name="cardCornerRadius">16dp</item>
-        <item name="cardElevation">2dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">?attr/colorOutline</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
     </style>
 
-    <!-- Text appearance (Material 3) -->
+    <!-- Elevated card for primary content -->
+    <style name="Widget.ScreenMonitor.CardView.Elevated" parent="Widget.ScreenMonitor.CardView">
+        <item name="cardElevation">4dp</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <!-- ============================================================
+         TEXT APPEARANCES
+         ============================================================ -->
     <style name="TextAppearance.ScreenMonitor.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
         <item name="fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <style name="TextAppearance.ScreenMonitor.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
         <item name="fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.ScreenMonitor.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <style name="TextAppearance.ScreenMonitor.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
         <item name="android:lineSpacingExtra">4dp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <style name="TextAppearance.ScreenMonitor.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
         <item name="android:lineSpacingExtra">2dp</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.ScreenMonitor.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:lineSpacingExtra">1dp</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
     </style>
 
     <style name="TextAppearance.ScreenMonitor.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
         <item name="fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- Status text appearances -->
+    <style name="TextAppearance.ScreenMonitor.StatusRunning" parent="TextAppearance.ScreenMonitor.BodyLarge">
+        <item name="android:textColor">@color/status_running_text</item>
+        <item name="fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="TextAppearance.ScreenMonitor.StatusStopped" parent="TextAppearance.ScreenMonitor.BodyLarge">
+        <item name="android:textColor">@color/status_stopped_text</item>
+    </style>
+
+    <style name="TextAppearance.ScreenMonitor.StatusError" parent="TextAppearance.ScreenMonitor.BodyLarge">
+        <item name="android:textColor">@color/status_error_text</item>
+        <item name="fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="TextAppearance.ScreenMonitor.StatusStarting" parent="TextAppearance.ScreenMonitor.BodyLarge">
+        <item name="android:textColor">@color/status_starting_text</item>
+        <item name="fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Monospace for amounts -->
+    <style name="TextAppearance.ScreenMonitor.Mono" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">monospace</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- ============================================================
+         COMPOUND BUTTON STYLES
+         ============================================================ -->
+    <!-- Material Switch -->
+    <style name="Widget.ScreenMonitor.CompoundButton.MaterialSwitch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="trackColor">@color/switch_track_selector</item>
+        <item name="thumbColor">@color/switch_thumb_selector</item>
+        <item name="useMaterialThemeColors">false</item>
+    </style>
+
+    <!-- Radio Button -->
+    <style name="Widget.ScreenMonitor.CompoundButton.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
+        <item name="buttonTint">@color/radio_button_tint_selector</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:paddingVertical">10dp</item>
+    </style>
+
+    <!-- ============================================================
+         CHIP STYLE (for status badge)
+         ============================================================ -->
+    <style name="Widget.ScreenMonitor.Chip.Status" parent="Widget.Material3.Chip.AssistChip">
+        <item name="chipCornerRadius">20dp</item>
+        <item name="android:paddingHorizontal">16dp</item>
+        <item name="android:paddingVertical">8dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.05</item>
+        <item name="iconStartPadding">8dp</item>
+        <item name="iconEndPadding">8dp</item>
+        <item name="textStartPadding">0dp</item>
+        <item name="textEndPadding">0dp</item>
+    </style>
+
+    <!-- ============================================================
+         DIALOG STYLES
+         ============================================================ -->
+    <style name="Theme.ScreenMonitor.Dialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorSurface">?attr/colorSurface</item>
+        <item name="colorOnSurface">?attr/colorOnSurface</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.ScreenMonitor.Large</item>
+    </style>
+
+    <style name="Theme.ScreenMonitor.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="colorSurface">?attr/colorSurface</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.ScreenMonitor.Large</item>
     </style>
 </resources>

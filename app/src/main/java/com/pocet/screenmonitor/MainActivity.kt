@@ -19,6 +19,7 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.material.chip.Chip
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -52,7 +53,6 @@ class MainActivity : AppCompatActivity() {
 
     // UI Elements
     private lateinit var tvStatus: TextView
-    private lateinit var tvLastSync: TextView
     private lateinit var btnStartCapture: Button
     private lateinit var btnStopCapture: Button
     private lateinit var btnTestConnection: Button
@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rgAccountType: RadioGroup
     private lateinit var rbReal: RadioButton
     private lateinit var rbDemo: RadioButton
+    private lateinit var chipStatus: com.google.android.material.chip.Chip
 
     // Store last error for copy functionality
     private var lastTestError: String? = null
@@ -161,7 +162,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun initViews() {
         tvStatus = findViewById(R.id.tvStatus)
-        tvLastSync = findViewById(R.id.tvLastSync)
         btnStartCapture = findViewById(R.id.btnStartCapture)
         btnStopCapture = findViewById(R.id.btnStopCapture)
         btnTestConnection = findViewById(R.id.btnTestConnection)
@@ -175,6 +175,7 @@ class MainActivity : AppCompatActivity() {
         rgAccountType = findViewById(R.id.rgAccountType)
         rbReal = findViewById(R.id.rbReal)
         rbDemo = findViewById(R.id.rbDemo)
+        chipStatus = findViewById(R.id.chipStatus)
 
         // Load saved account type preference
         loadAccountTypePreference()
@@ -587,7 +588,8 @@ class MainActivity : AppCompatActivity() {
         // runs afterwards, so every view access must be guarded.
         if (!this::btnStartCapture.isInitialized ||
             !this::btnStopCapture.isInitialized ||
-            !this::tvStatus.isInitialized
+            !this::tvStatus.isInitialized ||
+            !this::chipStatus.isInitialized
         ) {
             return
         }
@@ -598,10 +600,41 @@ class MainActivity : AppCompatActivity() {
         btnStartCapture.isEnabled = !isRunning && !isStarting
         btnStopCapture.isEnabled = isRunning || isStarting
 
+        // Update status text
         tvStatus.text = when {
             isRunning -> getString(R.string.status_running)
             isStarting -> getString(R.string.status_starting_capture)
             else -> getString(R.string.status_stopped)
+        }
+
+        // Update status chip with appropriate text, icon, and colors
+        updateStatusChip(isRunning, isStarting)
+    }
+
+    private fun updateStatusChip(isRunning: Boolean, isStarting: Boolean) {
+        val chip = chipStatus
+        when {
+            isRunning -> {
+                chip.text = getString(R.string.status_running)
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_running)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_running_border)
+                chip.setChipBackgroundColorResource(R.color.status_running_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_running_text))
+            }
+            isStarting -> {
+                chip.text = getString(R.string.status_starting_capture)
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_starting)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_starting_border)
+                chip.setChipBackgroundColorResource(R.color.status_starting_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_starting_text))
+            }
+            else -> {
+                chip.text = getString(R.string.status_stopped)
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_stopped)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_stopped_border)
+                chip.setChipBackgroundColorResource(R.color.status_stopped_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_stopped_text))
+            }
         }
     }
 
@@ -609,6 +642,64 @@ class MainActivity : AppCompatActivity() {
         Timber.d("Status: $message")
         if (this::tvStatus.isInitialized) {
             tvStatus.text = message
+        }
+        // Also update chip for special status messages
+        if (this::chipStatus.isInitialized) {
+            updateStatusChipForMessage(message)
+        }
+    }
+
+    private fun updateStatusChipForMessage(message: String) {
+        val chip = chipStatus
+        when {
+            message.contains(getString(R.string.status_running).substring(0, 3)) -> {
+                // Running status (handle localization)
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_running)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_running_border)
+                chip.setChipBackgroundColorResource(R.color.status_running_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_running_text))
+            }
+            message.contains(getString(R.string.status_starting_capture).substring(0, 3)) -> {
+                // Starting status
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_starting)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_starting_border)
+                chip.setChipBackgroundColorResource(R.color.status_starting_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_starting_text))
+            }
+            message.contains("Ошибка") || message.contains("Error") || message.contains("❌") -> {
+                // Error status
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_error)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_error_border)
+                chip.setChipBackgroundColorResource(R.color.status_error_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_error_text))
+            }
+            message.contains("🔄") || message.contains("Проверка") || message.contains("Запуск") || message.contains("Требуется") -> {
+                // Pending/warning status
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_starting)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_starting_border)
+                chip.setChipBackgroundColorResource(R.color.status_starting_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_starting_text))
+            }
+            message.contains("✅") || message.contains("успешно") || message.contains("success") -> {
+                // Success status
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_running)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_running_border)
+                chip.setChipBackgroundColorResource(R.color.status_success_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_success_text))
+            }
+            else -> {
+                // Default stopped status
+                chip.text = message
+                chip.chipIcon = ContextCompat.getDrawable(this, R.drawable.ic_status_stopped)
+                chip.chipIconTint = ContextCompat.getColorStateList(this, R.color.status_stopped_border)
+                chip.setChipBackgroundColorResource(R.color.status_stopped_bg)
+                chip.setTextColor(ContextCompat.getColor(this, R.color.status_stopped_text))
+            }
         }
     }
 

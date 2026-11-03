@@ -38,6 +38,8 @@
     <string name="fast_mode_title">Быстрый режим (до ~2 секунд)</string>
     <string name="fast_mode_desc">Экран проверяется каждую секунду, OCR запускается только при изменении области баланса, а запись в таблицу — только когда сумма изменилась. Обычный режим: проверка раз в 10 секунд, запись раз в минуту. Для 6 часов трейдинга в день быстрый режим даёт умеренный расход батареи.</string>
     <string name="section_permissions">Разрешения и настройки</string>
+    <string name="section_history">История баланса</string>
+
     <string name="section_community">Помощь и исходники</string>
     <string name="desc_community">Как это работает, пример таблицы Plan_30_days и исходный код — на GitHub. Вопросы, обновления и связь с автором — в Telegram.</string>
     <string name="btn_github">GitHub проекта</string>

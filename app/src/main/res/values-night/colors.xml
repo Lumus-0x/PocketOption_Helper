@@ -1,87 +1,106 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 Dark Theme Colors (used as design tokens) -->
-    <color name="md_theme_light_primary">#A6C8EE</color>
-    <color name="md_theme_light_onPrimary">#00335E</color>
-    <color name="md_theme_light_primaryContainer">#00498A</color>
-    <color name="md_theme_light_onPrimaryContainer">#D6E4F0</color>
+    <!-- ============================================================
+         LIGHT THEME COLORS (values-night = light mode)
+         Pocket Option inspired light theme with trading colors
+         ============================================================ -->
 
-    <color name="md_theme_light_secondary">#BAC8E0</color>
-    <color name="md_theme_light_onSecondary">#1F354A</color>
-    <color name="md_theme_light_secondaryContainer">#354D63</color>
-    <color name="md_theme_light_onSecondaryContainer">#D6E4F0</color>
+    <!-- Semantic Colors (referenced by themes) - LIGHT MODE -->
+    <!-- Primary = Green (profit/success) -->
+    <color name="colorPrimary">@color/po_light_green</color>
+    <color name="colorPrimaryVariant">@color/po_light_green</color>
+    <color name="colorOnPrimary">@color/po_white</color>
+    <color name="colorPrimaryContainer">@color/po_light_green_dim</color>
+    <color name="colorOnPrimaryContainer">@color/po_dark_bg</color>
 
-    <color name="md_theme_light_tertiary">#CCC2E0</color>
-    <color name="md_theme_light_onTertiary">#332B48</color>
-    <color name="md_theme_light_tertiaryContainer">#4A435E</color>
-    <color name="md_theme_light_onTertiaryContainer">#E8DEF8</color>
+    <!-- Secondary = Gold (warning/pending) -->
+    <color name="colorSecondary">@color/po_light_gold</color>
+    <color name="colorSecondaryVariant">@color/po_light_gold_dim</color>
+    <color name="colorOnSecondary">@color/po_white</color>
+    <color name="colorSecondaryContainer">@color/po_light_gold_dim</color>
+    <color name="colorOnSecondaryContainer">@color/po_dark_bg</color>
 
-    <color name="md_theme_light_error">#F2B8B5</color>
-    <color name="md_theme_light_onError">#601410</color>
-    <color name="md_theme_light_errorContainer">#8C1D18</color>
-    <color name="md_theme_light_onErrorContainer">#FCD8D8</color>
+    <!-- Tertiary = Red (loss/error) -->
+    <color name="colorTertiary">@color/po_light_red</color>
+    <color name="colorOnTertiary">@color/po_white</color>
+    <color name="colorTertiaryContainer">@color/po_light_red_dim</color>
+    <color name="colorOnTertiaryContainer">@color/po_white</color>
 
-    <color name="md_theme_light_surface">#1D1D1F</color>
-    <color name="md_theme_light_onSurface">#E8E6EA</color>
-    <color name="md_theme_light_surfaceVariant">#4A4451</color>
-    <color name="md_theme_light_onSurfaceVariant">#CAC4D0</color>
+    <!-- Error -->
+    <color name="colorError">@color/po_light_red</color>
+    <color name="colorOnError">@color/po_white</color>
+    <color name="colorErrorContainer">@color/po_light_red_dim</color>
+    <color name="colorOnErrorContainer">@color/po_white</color>
 
-    <color name="md_theme_light_outline">#938F99</color>
-    <color name="md_theme_light_outlineVariant">#4A4451</color>
+    <!-- Surface -->
+    <color name="colorSurface">@color/po_light_surface</color>
+    <color name="colorOnSurface">@color/po_light_on_surface</color>
+    <color name="colorSurfaceVariant">@color/po_light_surface_variant</color>
+    <color name="colorOnSurfaceVariant">@color/po_light_on_surface_variant</color>
+    <color name="colorOutline">@color/po_light_outline</color>
+    <color name="colorOutlineVariant">@color/po_light_outline</color>
 
-    <color name="md_theme_light_background">#1D1D1F</color>
-    <color name="md_theme_light_onBackground">#E8E6EA</color>
+    <!-- Background -->
+    <color name="colorBackground">@color/po_light_bg</color>
+    <color name="colorOnBackground">@color/po_light_on_surface</color>
 
-    <color name="md_theme_light_inverseSurface">#E8E6EA</color>
-    <color name="md_theme_light_inverseOnSurface">#343336</color>
-    <color name="md_theme_light_inversePrimary">#1976D2</color>
+    <!-- Inverse -->
+    <color name="colorInverseSurface">@color/po_dark_bg</color>
+    <color name="colorInverseOnSurface">@color/po_white</color>
+    <color name="colorInversePrimary">@color/po_green</color>
 
-    <color name="md_theme_light_shadow">#000000</color>
-    <color name="md_theme_light_scrim">#000000</color>
-    <color name="md_theme_light_surfaceTint">#A6C8EE</color>
+    <!-- Shadow & Scrim -->
+    <color name="colorShadow">#000000</color>
+    <color name="colorScrim">#000000</color>
+    <color name="colorSurfaceTint">@color/po_light_green</color>
 
-    <!-- Material 2 theme attributes (referenced in themes.xml) -->
-    <color name="colorPrimary">#A6C8EE</color>
-    <color name="colorPrimaryVariant">#00498A</color>
-    <color name="colorOnPrimary">#00335E</color>
-    <color name="colorSecondary">#BAC8E0</color>
-    <color name="colorSecondaryVariant">#354D63</color>
-    <color name="colorOnSecondary">#1F354A</color>
-    <color name="colorTertiary">#CCC2E0</color>
-    <color name="colorOnTertiary">#332B48</color>
-    <color name="colorError">#F2B8B5</color>
-    <color name="colorOnError">#601410</color>
-    <color name="colorSurface">#1D1D1F</color>
-    <color name="colorOnSurface">#E8E6EA</color>
-    <color name="colorBackground">#1D1D1F</color>
-    <color name="colorOnBackground">#E8E6EA</color>
+    <!-- Status-specific colors (Light) -->
+    <color name="status_running_bg">@color/po_light_green_dim</color>
+    <color name="status_running_text">@color/po_light_green</color>
+    <color name="status_running_border">@color/po_light_green</color>
+    <color name="status_stopped_bg">@color/po_light_surface_variant</color>
+    <color name="status_stopped_text">@color/po_light_on_surface_muted</color>
+    <color name="status_stopped_border">@color/po_light_outline</color>
+    <color name="status_error_bg">@color/po_light_red_dim</color>
+    <color name="status_error_text">@color/po_light_red</color>
+    <color name="status_error_border">@color/po_light_red</color>
+    <color name="status_starting_bg">@color/po_light_gold_dim</color>
+    <color name="status_starting_text">@color/po_light_gold</color>
+    <color name="status_starting_border">@color/po_light_gold</color>
+    <color name="status_permission_bg">@color/po_light_gold_dim</color>
+    <color name="status_permission_text">@color/po_light_gold</color>
+    <color name="status_permission_border">@color/po_light_gold</color>
+    <color name="status_webapp_bg">@color/po_light_gold_dim</color>
+    <color name="status_webapp_text">@color/po_light_gold</color>
+    <color name="status_webapp_border">@color/po_light_gold</color>
+    <color name="status_testing_bg">@color/po_light_gold_dim</color>
+    <color name="status_testing_text">@color/po_light_gold</color>
+    <color name="status_testing_border">@color/po_light_gold</color>
+    <color name="status_success_bg">@color/po_light_green_dim</color>
+    <color name="status_success_text">@color/po_light_green</color>
+    <color name="status_success_border">@color/po_light_green</color>
+    <color name="status_connection_error_bg">@color/po_light_red_dim</color>
+    <color name="status_connection_error_text">@color/po_light_red</color>
+    <color name="status_connection_error_border">@color/po_light_red</color>
 
-    <!-- Legacy color names for backward compatibility -->
-    <color name="primary">#A6C8EE</color>
-    <color name="primary_variant">#1565C0</color>
-    <color name="on_primary">#00335E</color>
-    <color name="secondary">#03DAC6</color>
-    <color name="secondary_variant">#018786</color>
-    <color name="on_secondary">#000000</color>
-    <color name="surface">#1D1D1F</color>
-    <color name="on_surface">#E8E6EA</color>
-    <color name="on_surface_variant">#CAC4D0</color>
-    <color name="background">#1D1D1F</color>
-    <color name="on_background">#E8E6EA</color>
-    <color name="error">#F2B8B5</color>
-    <color name="on_error">#000000</color>
-    <color name="success">#388E3C</color>
-    <color name="on_success">#FFFFFF</color>
-    <color name="warning">#F57C00</color>
-    <color name="on_warning">#000000</color>
-    <color name="divider">#4A4451</color>
+    <!-- Legacy color names -->
+    <color name="primary">@color/po_light_green</color>
+    <color name="primary_variant">@color/po_light_green</color>
+    <color name="on_primary">@color/po_white</color>
+    <color name="secondary">@color/po_light_gold</color>
+    <color name="secondary_variant">@color/po_light_gold_dim</color>
+    <color name="on_secondary">@color/po_white</color>
+    <color name="surface">@color/po_light_surface</color>
+    <color name="on_surface">@color/po_light_on_surface</color>
+    <color name="on_surface_variant">@color/po_light_on_surface_variant</color>
+    <color name="background">@color/po_light_bg</color>
+    <color name="on_background">@color/po_light_on_surface</color>
+    <color name="error">@color/po_light_red</color>
+    <color name="on_error">@color/po_white</color>
+    <color name="success">@color/po_light_green</color>
+    <color name="on_success">@color/po_white</color>
+    <color name="warning">@color/po_light_gold</color>
+    <color name="on_warning">@color/po_dark_bg</color>
+    <color name="divider">@color/po_light_outline</color>
     <color name="transparent">#00000000</color>
-
-    <!-- Pocket Option inspired dark theme colors -->
-    <color name="po_dark_bg">#0F1419</color>
-    <color name="po_dark_surface">#1A1F25</color>
-    <color name="po_green">#00C853</color>
-    <color name="po_red">#FF1744</color>
-    <color name="po_teal">#00E676</color>
-    <color name="po_gold">#FFD600</color>
 </resources>
