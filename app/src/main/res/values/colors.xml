@@ -11,7 +11,7 @@
     <color name="po_dark_surface">#1A1F25</color>
     <color name="po_dark_surface_variant">#222A33</color>
     <color name="po_dark_outline">#2D3748</color>
-    <color name="po_green">#00C853</color>
+    <color name="po_green">#3F51B5</color>
     <color name="po_green_dim">#00C85380</color>
     <color name="po_green_light">#69F0AE</color>
     <color name="po_red">#FF1744</color>
@@ -22,7 +22,7 @@
     <color name="po_gold_dim">#FFD60080</color>
     <color name="po_white">#FFFFFF</color>
     <color name="po_white_dim">#FFFFFFB3</color>
-    <color name="po_white_muted">#FFFFFF80</color>
+    <color name="po_white_muted">#2196F3</color>
     <color name="po_white_subtle">#FFFFFF4D</color>
 
     <!-- Light Theme Colors (for users who prefer light mode) -->

@@ -173,16 +173,17 @@
                     <!-- Stop Button - Tonal (Secondary) -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnStopCapture"
+                        style="@style/Widget.ScreenMonitor.Button.Tonal"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
                         android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:minHeight="52dp"
                         android:text="@string/btn_stop_capture"
+                        app:backgroundTint="#FF3744"
                         app:icon="@drawable/ic_stop_circle_filled"
                         app:iconGravity="start"
-                        app:iconPadding="10dp"
-                        style="@style/Widget.ScreenMonitor.Button.Tonal"
-                        android:minHeight="52dp" />
+                        app:iconPadding="10dp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -218,7 +219,7 @@
                         android:layout_height="24dp"
                         android:layout_marginEnd="10dp"
                         android:src="@drawable/ic_cloud_sync"
-                        android:tint="?attr/colorPrimary"
+                        android:tint="@color/colorInversePrimary"
                         android:contentDescription="@null" />
 
                     <TextView
